@@ -99,7 +99,7 @@ public class RestoreSubCmd extends IRPCommand {
         PlayerMenu menu = new PlayerMenu(staff, offlinePlayer);
 
         PlayerScheduler.openInventory(staff, menu.getInventory());
-        PlayerScheduler.run(staff, menu::getPlayerMenu);
+        menu.populatePlayerMenuAsync();
     }
 
 }

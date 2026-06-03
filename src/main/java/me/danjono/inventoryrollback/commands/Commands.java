@@ -123,7 +123,7 @@ public class Commands extends ConfigData implements CommandExecutor, TabComplete
         PlayerMenu menu = new PlayerMenu(staff, offlinePlayer);
 
         PlayerScheduler.openInventory(staff, menu.getInventory());
-        PlayerScheduler.run(staff, menu::getPlayerMenu);
+        menu.populatePlayerMenuAsync();
     }
 
     private void forceBackupCommand(CommandSender sender, String[] args) {

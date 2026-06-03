@@ -31,7 +31,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.ExecutionException;
 
 public class ClickGUI implements Listener {
 
@@ -147,7 +146,7 @@ public class ClickGUI implements Listener {
                 PlayerMenu menu = new PlayerMenu(staff, offlinePlayer);
 
                 PlayerScheduler.openInventory(staff, menu.getInventory());
-                PlayerScheduler.run(staff, menu::getPlayerMenu);
+                menu.populatePlayerMenuAsync();
             }
         } else {
             if (e.getRawSlot() >= e.getInventory().getSize() && !e.isShiftClick()) {
@@ -179,7 +178,7 @@ public class ClickGUI implements Listener {
                 RollbackListMenu menu = new RollbackListMenu(staff, offlinePlayer, logType, 1);
 
                 PlayerScheduler.openInventory(staff, menu.getInventory());
-                PlayerScheduler.run(staff, menu::showBackups);
+                menu.populateBackupsAsync();
             }
 
         } else {
@@ -211,24 +210,18 @@ public class ClickGUI implements Listener {
                         // Init from MySQL or, if YAML, init & load config file
                         PlayerData data = new PlayerData(uuid, logType, timestamp);
 
-                        // Get from MySQL
-                        if (ConfigData.getSaveType() == ConfigData.SaveType.MYSQL) {
-                            try {
-                                data.getAllBackupData().get();
-                            } catch (ExecutionException | InterruptedException ex) {
-                                ex.printStackTrace();
-                            }
-                        }
+                        loadAllBackupData(data);
 
-                        // Create inventory
-                        MainInventoryBackupMenu menu = new MainInventoryBackupMenu(staff, data, location);
-
-                        PlayerScheduler.call(staff, () -> staff.openInventory(menu.getInventory())).whenComplete((view, ex) -> {
+                        PlayerScheduler.call(staff, () -> {
+                            MainInventoryBackupMenu menu = new MainInventoryBackupMenu(staff, data, location);
+                            staff.openInventory(menu.getInventory());
+                            return menu;
+                        }).whenComplete((menu, ex) -> {
                             if (ex != null) {
                                 ex.printStackTrace();
                                 return;
                             }
-                            if (view == null) {
+                            if (menu == null) {
                                 return;
                             }
                             menu.showBackupItems();
@@ -247,13 +240,13 @@ public class ClickGUI implements Listener {
                     PlayerMenu menu = new PlayerMenu(staff, player);
 
                     PlayerScheduler.openInventory(staff, menu.getInventory());
-                    PlayerScheduler.run(staff, menu::getPlayerMenu);
+                    menu.populatePlayerMenuAsync();
                 } else {
                     LogType logType = LogType.valueOf(nbt.getString("logType"));
                     RollbackListMenu menu = new RollbackListMenu(staff, player, logType, page);
 
                     PlayerScheduler.openInventory(staff, menu.getInventory());
-                    PlayerScheduler.run(staff, menu::showBackups);
+                    menu.populateBackupsAsync();
                 }
             }	
         } else {
@@ -281,7 +274,7 @@ public class ClickGUI implements Listener {
                 RollbackListMenu menu = new RollbackListMenu(staff, offlinePlayer, logType, 1);
 
                 PlayerScheduler.openInventory(staff, menu.getInventory());
-                PlayerScheduler.run(staff, menu::showBackups);
+                menu.populateBackupsAsync();
             }
 
             //Click on page selector button to go back to rollback menu
@@ -303,14 +296,7 @@ public class ClickGUI implements Listener {
                     // Init from MySQL or, if YAML, init & load config file
                     PlayerData data = new PlayerData(offlinePlayer, logType, timestamp);
 
-                    // Get data if using MySQL
-                    if (ConfigData.getSaveType() == ConfigData.SaveType.MYSQL) {
-                        try {
-                            data.getAllBackupData().get();
-                        } catch (ExecutionException | InterruptedException ex) {
-                            ex.printStackTrace();
-                        }
-                    }
+                    loadAllBackupData(data);
 
                     ItemStack[] mainInventory = data.getMainInventory();
                     ItemStack[] extraItems = data.getArmour();
@@ -331,39 +317,11 @@ public class ClickGUI implements Listener {
 
                     System.arraycopy(hotBar, 0, firstShulkerContents, 0, hotBar.length);
                     System.arraycopy(extraItems, 0, firstShulkerContents, 9, Math.min(extraItems.length, 18));
-
                     System.arraycopy(invContents, 0, secondShulkerContents, 0, Math.min(invContents.length, 27));
 
-                    ItemStack firstShulker = new ItemStack(Material.SHULKER_BOX);
-                    ItemStack secondShulker = new ItemStack(Material.SHULKER_BOX);
-
-                    ItemMeta firstMeta = firstShulker.getItemMeta();
-                    if (firstMeta instanceof BlockStateMeta) {
-                        BlockStateMeta blockMeta = (BlockStateMeta) firstMeta;
-                        if (blockMeta.getBlockState() instanceof ShulkerBox) {
-                            ShulkerBox shulkerBox = (ShulkerBox) blockMeta.getBlockState();
-                            shulkerBox.getInventory().setContents(firstShulkerContents);
-                            blockMeta.setBlockState(shulkerBox);
-                            blockMeta.setDisplayName(MessageData.getShulkerBoxFirstShulkerName());
-                            blockMeta.setLore(MessageData.getShulkerBoxFirstShulkerLore());
-                            firstShulker.setItemMeta(blockMeta);
-                        }
-                    }
-
-                    ItemMeta secondMeta = secondShulker.getItemMeta();
-                    if (secondMeta instanceof BlockStateMeta) {
-                        BlockStateMeta blockMeta = (BlockStateMeta) secondMeta;
-                        if (blockMeta.getBlockState() instanceof ShulkerBox) {
-                            ShulkerBox shulkerBox = (ShulkerBox) blockMeta.getBlockState();
-                            shulkerBox.getInventory().setContents(secondShulkerContents);
-                            blockMeta.setBlockState(shulkerBox);
-                            blockMeta.setDisplayName(MessageData.getShulkerBoxSecondShulkerName());
-                            blockMeta.setLore(MessageData.getShulkerBoxSecondShulkerLore());
-                            secondShulker.setItemMeta(blockMeta);
-                        }
-                    }
-
                     PlayerScheduler.run(staff, () -> {
+                        ItemStack firstShulker = createShulker(firstShulkerContents, MessageData.getShulkerBoxFirstShulkerName(), MessageData.getShulkerBoxFirstShulkerLore());
+                        ItemStack secondShulker = createShulker(secondShulkerContents, MessageData.getShulkerBoxSecondShulkerName(), MessageData.getShulkerBoxSecondShulkerLore());
                         staff.getInventory().addItem(firstShulker, secondShulker);
                         staff.closeInventory();
                     });
@@ -387,14 +345,7 @@ public class ClickGUI implements Listener {
                             // Init from MySQL or, if YAML, init & load config file
                             PlayerData data = new PlayerData(offlinePlayer, logType, timestamp);
 
-                            // Get data if using MySQL
-                            if (ConfigData.getSaveType() == ConfigData.SaveType.MYSQL) {
-                                try {
-                                    data.getAllBackupData().get();
-                                } catch (ExecutionException | InterruptedException ex) {
-                                    ex.printStackTrace();
-                                }
-                            }
+                            loadAllBackupData(data);
 
                             ItemStack[] inventory = data.getMainInventory();
                             ItemStack[] armour = data.getArmour();
@@ -490,25 +441,15 @@ public class ClickGUI implements Listener {
                         // Init from MySQL or, if YAML, init & load config file
                         PlayerData data = new PlayerData(offlinePlayer, logType, timestamp);
 
-                        // Get data if using MySQL
-                        if (ConfigData.getSaveType() == ConfigData.SaveType.MYSQL) {
-                            try {
-                                data.getAllBackupData().get();
-                            } catch (ExecutionException | InterruptedException ex) {
-                                ex.printStackTrace();
-                            }
-                        }
+                        loadAllBackupData(data);
 
-                        // Create Inventory
-                        EnderChestBackupMenu menu = new EnderChestBackupMenu(staff, data, 1);
-
-                        // Open inventory sync (compressed code)
                         PlayerScheduler.call(staff, () -> {
+                            EnderChestBackupMenu menu = new EnderChestBackupMenu(staff, data, 1);
                             staff.openInventory(menu.getInventory());
-                            return null;
-                        }).whenComplete((res, ex) -> {
+                            return menu;
+                        }).whenComplete((menu, ex) -> {
                             if (ex != null) ex.printStackTrace();
-                            else {
+                            else if (menu != null) {
                                 menu.showEnderChestItems();
                             }
                         });
@@ -653,34 +594,25 @@ public class ClickGUI implements Listener {
                             // Init from MySQL or, if YAML, init & load config file
                             PlayerData data = new PlayerData(offlinePlayer, logType, timestamp);
 
-                            // Get data if using MySQL
-                            if (ConfigData.getSaveType() == ConfigData.SaveType.MYSQL) {
-                                try {
-                                    data.getAllBackupData().get();
-                                } catch (ExecutionException | InterruptedException ex) {
-                                    ex.printStackTrace();
-                                }
-                            }
+                            loadAllBackupData(data);
 
                             // Get location of where the backup was made from data
                             String location = data.getWorld() + "," + data.getX() + "," + data.getY() + "," + data.getZ();
 
-                            // Create inventory
-                            MainInventoryBackupMenu menu = new MainInventoryBackupMenu(staff, data, location);
-
-                            // Display inventory to player
-                            PlayerScheduler.call(staff, () -> staff.openInventory(menu.getInventory()))
-                                    .whenComplete((view, ex) -> {
-                                        if (ex != null) {
-                                            ex.printStackTrace();
-                                            return;
-                                        }
-                                        if (view == null) {
-                                            // backup inválido, tratar aqui se quiser
-                                            return;
-                                        }
-                                        menu.showBackupItems();
-                                    });
+                            PlayerScheduler.call(staff, () -> {
+                                MainInventoryBackupMenu menu = new MainInventoryBackupMenu(staff, data, location);
+                                staff.openInventory(menu.getInventory());
+                                return menu;
+                            }).whenComplete((menu, ex) -> {
+                                if (ex != null) {
+                                    ex.printStackTrace();
+                                    return;
+                                }
+                                if (menu == null) {
+                                    return;
+                                }
+                                menu.showBackupItems();
+                            });
                         }
                     });
 
@@ -692,25 +624,15 @@ public class ClickGUI implements Listener {
                             // Init from MySQL or, if YAML, init & load config file
                             PlayerData data = new PlayerData(offlinePlayer, logType, timestamp);
 
-                            // Get data if using MySQL
-                            if (ConfigData.getSaveType() == ConfigData.SaveType.MYSQL) {
-                                try {
-                                    data.getAllBackupData().get();
-                                } catch (ExecutionException | InterruptedException ex) {
-                                    ex.printStackTrace();
-                                }
-                            }
+                            loadAllBackupData(data);
 
-                            // Create Inventory
-                            EnderChestBackupMenu menu = new EnderChestBackupMenu(staff, data, page);
-
-                            // Open inventory sync (compressed code)
                             PlayerScheduler.call(staff, () -> {
+                                EnderChestBackupMenu menu = new EnderChestBackupMenu(staff, data, page);
                                 staff.openInventory(menu.getInventory());
-                                return null;
-                            }).whenComplete((res, ex) -> {
+                                return menu;
+                            }).whenComplete((menu, ex) -> {
                                 if (ex != null) ex.printStackTrace();
-                                else {
+                                else if (menu != null) {
                                     menu.showEnderChestItems();
                                 }
                             });
@@ -738,52 +660,30 @@ public class ClickGUI implements Listener {
                     // Init from MySQL or, if YAML, init & load config file
                     PlayerData data = new PlayerData(offlinePlayer, logType, timestamp);
 
-                    // Get data if using MySQL
-                    if (ConfigData.getSaveType() == ConfigData.SaveType.MYSQL) {
-                        try {
-                            data.getAllBackupData().get();
-                        } catch (ExecutionException | InterruptedException ex) {
-                            ex.printStackTrace();
-                        }
-                    }
+                    loadAllBackupData(data);
 
                     ItemStack[] enderChest = data.getEnderChest();
 
-                    List<ItemStack> shulkers = new ArrayList<>();
-                    if (enderChest != null && enderChest.length != 0) {
-                        int totalItems = enderChest.length;
-                        int shulkerCount = (int) Math.ceil(totalItems / 27.0);
-
-                        for (int i = 0; i < shulkerCount; i++) {
-                            int start = i * 27;
-                            int end = Math.min(start + 27, totalItems);
-
-                            ItemStack[] shulkerContents = new ItemStack[27];
-                            System.arraycopy(enderChest, start, shulkerContents, 0, end - start);
-
-                            ItemStack shulker = new ItemStack(Material.SHULKER_BOX);
-                            ItemMeta meta = shulker.getItemMeta();
-
-                            if (meta instanceof BlockStateMeta) {
-                                BlockStateMeta blockMeta = (BlockStateMeta) meta;
-                                if (blockMeta.getBlockState() instanceof ShulkerBox) {
-                                    ShulkerBox shulkerBox = (ShulkerBox) blockMeta.getBlockState();
-                                    shulkerBox.getInventory().setContents(shulkerContents);
-                                    blockMeta.setBlockState(shulkerBox);
-                                    String name = (shulkerCount == 1)
-                                            ? MessageData.getShulkerBoxEnderChestShulkerName()
-                                            : (MessageData.getShulkerBoxEnderChestShulkerName() + MessageData.getShulkerBoxEnderChestShulkerExtraShulkers(i+1));
-                                    blockMeta.setDisplayName(name);
-                                    blockMeta.setLore(MessageData.getShulkerBoxEnderChestShulkerLore());
-                                    shulker.setItemMeta(blockMeta);
-                                }
-                            }
-
-                            shulkers.add(shulker);
-                        }
-                    };
-
                     PlayerScheduler.run(staff, () -> {
+                        List<ItemStack> shulkers = new ArrayList<>();
+                        if (enderChest != null && enderChest.length != 0) {
+                            int totalItems = enderChest.length;
+                            int shulkerCount = (int) Math.ceil(totalItems / 27.0);
+
+                            for (int i = 0; i < shulkerCount; i++) {
+                                int start = i * 27;
+                                int end = Math.min(start + 27, totalItems);
+
+                                ItemStack[] shulkerContents = new ItemStack[27];
+                                System.arraycopy(enderChest, start, shulkerContents, 0, end - start);
+
+                                String name = (shulkerCount == 1)
+                                        ? MessageData.getShulkerBoxEnderChestShulkerName()
+                                        : (MessageData.getShulkerBoxEnderChestShulkerName() + MessageData.getShulkerBoxEnderChestShulkerExtraShulkers(i + 1));
+                                shulkers.add(createShulker(shulkerContents, name, MessageData.getShulkerBoxEnderChestShulkerLore()));
+                            }
+                        }
+
                         staff.getInventory().addItem(shulkers.toArray(new ItemStack[0]));
                         staff.closeInventory();
                     });
@@ -808,14 +708,7 @@ public class ClickGUI implements Listener {
                             // Init from MySQL or, if YAML, init & load config file
                             PlayerData data = new PlayerData(offlinePlayer, logType, timestamp);
 
-                            // Get from MySQL
-                            if (ConfigData.getSaveType() == ConfigData.SaveType.MYSQL) {
-                                try {
-                                    data.getAllBackupData().get();
-                                } catch (ExecutionException | InterruptedException ex) {
-                                    ex.printStackTrace();
-                                }
-                            }
+                            loadAllBackupData(data);
 
                             // Display inventory to player
                             PlayerScheduler.call(player, () -> {
@@ -853,6 +746,33 @@ public class ClickGUI implements Listener {
                 e.setCancelled(false);
             }
         }
+    }
+
+
+    private ItemStack createShulker(ItemStack[] contents, String displayName, List<String> lore) {
+        ItemStack shulker = new ItemStack(Material.SHULKER_BOX);
+        ItemMeta meta = shulker.getItemMeta();
+
+        if (meta instanceof BlockStateMeta) {
+            BlockStateMeta blockMeta = (BlockStateMeta) meta;
+            if (blockMeta.getBlockState() instanceof ShulkerBox) {
+                ShulkerBox shulkerBox = (ShulkerBox) blockMeta.getBlockState();
+                shulkerBox.getInventory().setContents(contents);
+                blockMeta.setBlockState(shulkerBox);
+                blockMeta.setDisplayName(displayName);
+                blockMeta.setLore(lore);
+                shulker.setItemMeta(blockMeta);
+            }
+        }
+
+        return shulker;
+    }
+
+    private void loadAllBackupData(PlayerData data) {
+        if (ConfigData.getSaveType() != ConfigData.SaveType.MYSQL) {
+            return;
+        }
+        data.loadAllBackupData();
     }
 
 }
