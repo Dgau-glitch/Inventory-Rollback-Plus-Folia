@@ -15,7 +15,7 @@ import me.danjono.inventoryrollback.data.PlayerData;
 import me.danjono.inventoryrollback.gui.Buttons;
 import me.danjono.inventoryrollback.gui.InventoryName;
 import me.danjono.inventoryrollback.gui.menu.*;
-import me.danjono.inventoryrollback.inventory.RestoreInventory;
+import me.danjono.inventoryrollback.services.RestoreService;
 import org.bukkit.*;
 import org.bukkit.block.ShulkerBox;
 import org.bukkit.entity.Player;
@@ -35,6 +35,7 @@ import java.util.UUID;
 public class ClickGUI implements Listener {
 
     private final InventoryRollbackPlus main;
+    private final RestoreService restoreService;
 
     private static boolean isLocationAvailable(Location location) {
         return location != null;
@@ -42,6 +43,7 @@ public class ClickGUI implements Listener {
 
     public ClickGUI() {
         this.main = InventoryRollbackPlus.getInstance();
+        this.restoreService = new RestoreService(main);
     }
 
     @EventHandler
@@ -336,55 +338,7 @@ public class ClickGUI implements Listener {
                     return;
                 }
 
-                if (offlinePlayer.isOnline()) {
-                    Player player = (Player) offlinePlayer;
-
-                    SchedulerUtils.runTaskAsynchronously(new FoliaRunnable() {
-                        @Override
-                        public void run() {
-                            // Init from MySQL or, if YAML, init & load config file
-                            PlayerData data = new PlayerData(offlinePlayer, logType, timestamp);
-
-                            loadAllBackupData(data);
-
-                            ItemStack[] inventory = data.getMainInventory();
-                            ItemStack[] armour = data.getArmour();
-
-                            // Place inventory items sync (compressed code)
-                            PlayerScheduler.call(player, () -> {
-                                player.getInventory().setContents(inventory);
-                                return null;
-                            }).whenComplete((res, ex) -> {
-                                if (ex != null) ex.printStackTrace();
-                                else {
-                                    if (main.getVersion().lessOrEqThan(BukkitVersion.v1_8_R3)) {
-                                        PlayerScheduler.call(player, () -> {
-                                            player.getInventory().setArmorContents(armour);
-                                            return null;
-                                        }).whenComplete((r, e) -> {
-                                            if (e != null) e.printStackTrace();
-                                        });
-                                    }
-                                    if (SoundData.isInventoryRestoreEnabled()) {
-                                        PlayerScheduler.call(player, () -> {
-                                            player.playSound(player.getLocation(), SoundData.getInventoryRestored(), 1, 1);
-                                            return null;
-                                        }).whenComplete((r, e) -> {
-                                            if (e != null) e.printStackTrace();
-                                        });
-                                    }
-
-                                    player.sendMessage(MessageData.getPluginPrefix() + MessageData.getMainInventoryRestoredPlayer(staff.getName()));
-                                    if (!staff.getUniqueId().equals(player.getUniqueId()))
-                                        PlayerScheduler.sendMessage(staff, MessageData.getPluginPrefix() + MessageData.getMainInventoryRestored(offlinePlayer.getName()));
-                                }
-                            });
-                        }
-                    });
-
-                } else {
-                    staff.sendMessage(MessageData.getPluginPrefix() + MessageData.getMainInventoryNotOnline(offlinePlayer.getName()));
-                }
+                restoreService.restoreMainInventory(staff, offlinePlayer, logType, timestamp);
             }
 
             // Clicked icon to teleport player to backup coordinates
@@ -465,24 +419,8 @@ public class ClickGUI implements Listener {
                     return;
                 }
 
-                if (offlinePlayer.isOnline()) {
-                    Player player = (Player) offlinePlayer;
-                    double health = nbt.getDouble("health");
-
-                    PlayerScheduler.run(player, () -> {
-                        player.setHealth(health);
-
-                        if (SoundData.isFoodRestoredEnabled())
-                            player.playSound(player.getLocation(), SoundData.getFoodRestored(), 1, 1);
-
-                        player.sendMessage(MessageData.getPluginPrefix() + MessageData.getHealthRestoredPlayer(staff.getName()));
-                        if (!staff.getUniqueId().equals(player.getUniqueId()))
-                            PlayerScheduler.sendMessage(staff, MessageData.getPluginPrefix() + MessageData.getHealthRestored(player.getName()));
-                    });
-                } else {
-                    staff.sendMessage(MessageData.getPluginPrefix() + MessageData.getHealthNotOnline(offlinePlayer.getName()));
-                }
-            } 
+                restoreService.restoreHealth(staff, offlinePlayer, nbt.getDouble("health"));
+            }
 
             //Clicked icon to restore backup players hunger
             else if (icon.getType().equals(Buttons.getHungerIcon())) {
@@ -492,26 +430,8 @@ public class ClickGUI implements Listener {
                     return;
                 }
 
-                if (offlinePlayer.isOnline()) {
-                    Player player = (Player) offlinePlayer;
-                    int hunger = nbt.getInt("hunger");
-                    Float saturation = nbt.getFloat("saturation");
-
-                    PlayerScheduler.run(player, () -> {
-                        player.setFoodLevel(hunger);
-                        player.setSaturation(saturation);
-
-                        if (SoundData.isHungerRestoredEnabled())
-                            player.playSound(player.getLocation(), SoundData.getHungerRestored(), 1, 1);
-
-                        player.sendMessage(MessageData.getPluginPrefix() + MessageData.getHungerRestoredPlayer(staff.getName()));
-                        if (!staff.getUniqueId().equals(player.getUniqueId()))
-                            PlayerScheduler.sendMessage(staff, MessageData.getPluginPrefix() + MessageData.getHungerRestored(player.getName()));
-                    });
-                } else {
-                    staff.sendMessage(MessageData.getPluginPrefix() + MessageData.getHungerNotOnline(offlinePlayer.getName()));
-                }
-            } 
+                restoreService.restoreHunger(staff, offlinePlayer, nbt.getInt("hunger"), nbt.getFloat("saturation"));
+            }
 
             //Clicked icon to restore backup players experience
             else if (icon.getType().equals(Buttons.getExperienceIcon())) {
@@ -521,24 +441,7 @@ public class ClickGUI implements Listener {
                     return;
                 }
 
-                if (offlinePlayer.isOnline()) {
-                    Player player = (Player) offlinePlayer;
-                    Float xp = nbt.getFloat("xp");
-
-                    PlayerScheduler.run(player, () -> {
-                        RestoreInventory.setTotalExperience(player, xp);
-
-                        if (SoundData.isExperienceRestoredEnabled())
-                            player.playSound(player.getLocation(), SoundData.getExperienceSound(), 1, 1);
-
-                        int level = (int) RestoreInventory.getLevel(xp);
-                        player.sendMessage(MessageData.getPluginPrefix() + MessageData.getExperienceRestoredPlayer(staff.getName(), level));
-                        if (!staff.getUniqueId().equals(player.getUniqueId()))
-                            PlayerScheduler.sendMessage(staff, MessageData.getPluginPrefix() + MessageData.getExperienceRestored(player.getName(), level));
-                    });
-                } else {
-                    staff.sendMessage(MessageData.getPluginPrefix() + MessageData.getExperienceNotOnlinePlayer(offlinePlayer.getName()));
-                }
+                restoreService.restoreExperience(staff, offlinePlayer, nbt.getFloat("xp"));
             }
         } else {
             int slotIndex = e.getRawSlot();
@@ -698,37 +601,7 @@ public class ClickGUI implements Listener {
                     return;
                 }
 
-                if (offlinePlayer.isOnline()) {
-                    Player player = (Player) offlinePlayer;
-
-                    // Run all data retrieval operations async to avoid tick lag
-                    SchedulerUtils.runTaskAsynchronously(new FoliaRunnable() {
-                        @Override
-                        public void run() {
-                            // Init from MySQL or, if YAML, init & load config file
-                            PlayerData data = new PlayerData(offlinePlayer, logType, timestamp);
-
-                            loadAllBackupData(data);
-
-                            // Display inventory to player
-                            PlayerScheduler.call(player, () -> {
-                                player.getEnderChest().setContents(data.getEnderChest() != null ? data.getEnderChest() : new ItemStack[0]);
-
-                                if (SoundData.isInventoryRestoreEnabled())
-                                    player.playSound(player.getLocation(), SoundData.getInventoryRestored(), 1, 1);
-
-                                player.sendMessage(MessageData.getPluginPrefix() + MessageData.getEnderChestRestoredPlayer(staff.getName()));
-                                if (!staff.getUniqueId().equals(player.getUniqueId()))
-                                    PlayerScheduler.sendMessage(staff, MessageData.getPluginPrefix() + MessageData.getEnderChestRestored(offlinePlayer.getName()));
-                                return null;
-                            }).whenComplete((res, ex) -> {
-                                if (ex != null) ex.printStackTrace();
-                            });
-                        }
-                    });
-                } else {
-                    staff.sendMessage(MessageData.getPluginPrefix() + MessageData.getEnderChestNotOnline(offlinePlayer.getName()));
-                }
+                restoreService.restoreEnderChest(staff, offlinePlayer, logType, timestamp);
             }
         } else {
             int slotIndex = e.getRawSlot();
