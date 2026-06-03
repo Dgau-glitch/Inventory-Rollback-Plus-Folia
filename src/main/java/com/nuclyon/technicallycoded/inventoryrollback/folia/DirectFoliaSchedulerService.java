@@ -134,6 +134,12 @@ public class DirectFoliaSchedulerService implements FoliaSchedulerService {
     }
 
     @Override
+    public void cancelPluginTasks() {
+        plugin.getServer().getGlobalRegionScheduler().cancelTasks(plugin);
+        plugin.getServer().getAsyncScheduler().cancelTasks(plugin);
+    }
+
+    @Override
     @NotNull
     public <T> CompletableFuture<T> asyncFuture(@NotNull Callable<T> task) {
         CompletableFuture<T> future = new CompletableFuture<>();

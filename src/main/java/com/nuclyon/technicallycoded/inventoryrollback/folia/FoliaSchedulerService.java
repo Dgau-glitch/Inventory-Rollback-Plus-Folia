@@ -77,6 +77,8 @@ public interface FoliaSchedulerService {
     @NotNull
     ScheduledTask asyncTimer(@NotNull Runnable task, long initialDelayTicks, long periodTicks);
 
+    void cancelPluginTasks();
+
     @NotNull
     <T> CompletableFuture<T> asyncFuture(@NotNull Callable<T> task);
 }

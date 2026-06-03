@@ -133,6 +133,13 @@ public abstract class SchedulerUtils {
     }
 
     /**
+     * Cancels plugin-owned global and async scheduler tasks through Folia's typed schedulers.
+     */
+    public static void cancelPluginTasks() {
+        service().cancelPluginTasks();
+    }
+
+    /**
      * Runs a task on the owning region for the location, or on the global region when location is null.
      *
      * @param loc The location whose region should own the task, or null for the global region.

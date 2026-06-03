@@ -49,13 +49,6 @@
             <version>3.0.2</version>
             <scope>compile</scope>
         </dependency>
-        <!-- Paper-Lib -->
-        <dependency>
-            <groupId>io.papermc</groupId>
-            <artifactId>paperlib</artifactId>
-            <version>1.0.6</version>
-            <scope>compile</scope>
-        </dependency>
         <dependency>
             <groupId>org.jetbrains</groupId>
             <artifactId>annotations</artifactId>
@@ -132,15 +125,6 @@
                     <dependencyReducedPomLocation>${project.build.directory}/dependency-reduced-pom.xml</dependencyReducedPomLocation>
                     <filters>
                         <filter>
-                            <artifact>io.papermc:paperlib</artifact>
-                            <includes>
-                                <include>io/papermc/lib/**</include>
-                            </includes>
-                            <excludes>
-                                <exclude>**/MANIFEST.MF</exclude>
-                            </excludes>
-                        </filter>
-                        <filter>
                             <artifact>org.bstats:bstats-bukkit</artifact>
                             <includes>
                                 <include>org/bstats/**</include>
@@ -160,10 +144,6 @@
                         <relocation>
                             <pattern>org.bstats</pattern>
                             <shadedPattern>${project.groupId}.bstats</shadedPattern>
-                        </relocation>
-                        <relocation>
-                            <pattern>io.papermc.lib</pattern>
-                            <shadedPattern>${project.groupId}.paperlib</shadedPattern>
                         </relocation>
                         <relocation>
                             <pattern>com.tcoded.lightlibs.bukkitversion</pattern>

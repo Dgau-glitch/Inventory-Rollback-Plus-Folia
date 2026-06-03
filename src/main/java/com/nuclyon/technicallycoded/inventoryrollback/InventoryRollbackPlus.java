@@ -8,7 +8,6 @@ import com.nuclyon.technicallycoded.inventoryrollback.util.TimeZoneUtil;
 import com.nuclyon.technicallycoded.inventoryrollback.util.test.SelfTestSerialization;
 import com.tcoded.lightlibs.bukkitversion.BukkitVersion;
 import com.tcoded.lightlibs.bukkitversion.MCVersion;
-import io.papermc.lib.PaperLib;
 import me.danjono.inventoryrollback.InventoryRollback;
 import me.danjono.inventoryrollback.config.ConfigData;
 import me.danjono.inventoryrollback.config.MessageData;
@@ -32,8 +31,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class InventoryRollbackPlus extends InventoryRollback {
 
     private static InventoryRollbackPlus instancePlus;
-    public static boolean usingFolia = false;
-
     private TimeZoneUtil timeZoneUtil = null;
 
     private ConfigData configData;
@@ -43,16 +40,6 @@ public class InventoryRollbackPlus extends InventoryRollback {
 
     public static InventoryRollbackPlus getInstance() {
         return instancePlus;
-    }
-
-    @Override
-    public void onLoad() {
-        try {
-            Class.forName("io.papermc.paper.threadedregions.scheduler.RegionScheduler");
-            usingFolia = true;
-        } catch (ClassNotFoundException e) {
-            usingFolia = false;
-        }
     }
 
     @Override
@@ -104,15 +91,6 @@ public class InventoryRollbackPlus extends InventoryRollback {
         // Run after all plugin enable
         SchedulerUtils.runTask(null, EventLogs::patchLowestHandlers);
 
-        // PaperLib
-        if (!PaperLib.isPaper()) {
-            this.getLogger().info("----------------------------------------");
-            this.getLogger().info("We recommend updating your server to use Paper :)");
-            this.getLogger().info("Paper significantly reduces lag spikes among other benefits.");
-            this.getLogger().info("Learn more at: https://papermc.io/");
-            this.getLogger().info("----------------------------------------");
-        }
-
         // Run self-tests
         SelfTestSerialization.runTests();
     }
@@ -138,8 +116,8 @@ public class InventoryRollbackPlus extends InventoryRollback {
         // Unregister event listeners
         HandlerList.unregisterAll(this);
 
-        // Cancel tasks
-        if(!usingFolia) this.getServer().getScheduler().cancelTasks(this);
+        // Cancel plugin-owned global and async tasks through Folia schedulers.
+        SchedulerUtils.cancelPluginTasks();
 
         // Clear instance references
         instancePlus = null;
