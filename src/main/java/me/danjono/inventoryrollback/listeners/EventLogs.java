@@ -22,7 +22,6 @@ import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.RegisteredListener;
-import org.bukkit.projectiles.BlockProjectileSource;
 import org.bukkit.projectiles.ProjectileSource;
 import org.jetbrains.annotations.NotNull;
 
@@ -278,12 +277,8 @@ public class EventLogs implements Listener {
 					LivingEntity shooterEntity = (LivingEntity) shooter;
 					shooterName = ", " + shooterEntity.getName();
 				}
-				// Show shooter block type if it's a block projectile source
-				else if (shooter instanceof BlockProjectileSource) {
-					BlockProjectileSource shooterBlock = (BlockProjectileSource) shooter;
-					shooterName = ", " + shooterBlock.getBlock().getType().name();
-
-				}
+				// Block projectile source details are location-owned; resolving them is deferred
+				// instead of touching a block from an entity event.
 				// In all other cases, don't show projectile detailed shooter info
 			}
 

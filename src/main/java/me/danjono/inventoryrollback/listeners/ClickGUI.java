@@ -459,16 +459,26 @@ public class ClickGUI implements Listener {
                         Math.floor(Double.parseDouble(location[3])))
                         .add(0.5, 0.5, 0.5);				
 
-                // Teleport player on a slight delay to block the teleport icon glitching out into the player inventory
-                PlayerScheduler.runLater(staff, () -> {
-                    staff.closeInventory();
-                    staff.teleportAsync(loc).thenAccept((result) -> PlayerScheduler.run(staff, () -> {
-                        if (SoundData.isTeleportEnabled())
-                            staff.playSound(loc, SoundData.getTeleport(), 1, 1);
+                // First enter the target region so target-location access is owned by RegionScheduler,
+                // then return to the staff entity scheduler for player-owned inventory/teleport work.
+                SchedulerUtils.callSyncMethod(loc, () -> loc.clone()).whenComplete((targetLocation, ex) -> {
+                    if (ex != null) {
+                        ex.printStackTrace();
+                        PlayerScheduler.sendMessage(staff, MessageData.getPluginPrefix() + MessageData.getError());
+                        return;
+                    }
 
-                        staff.sendMessage(MessageData.getPluginPrefix() + MessageData.getDeathLocationTeleport(loc));
-                    }));
-                }, 1L);
+                    // Teleport player on a slight delay to block the teleport icon glitching out into the player inventory
+                    PlayerScheduler.runLater(staff, () -> {
+                        staff.closeInventory();
+                        staff.teleportAsync(targetLocation).thenAccept((result) -> PlayerScheduler.run(staff, () -> {
+                            if (SoundData.isTeleportEnabled())
+                                staff.playSound(targetLocation, SoundData.getTeleport(), 1, 1);
+
+                            staff.sendMessage(MessageData.getPluginPrefix() + MessageData.getDeathLocationTeleport(targetLocation));
+                        }));
+                    }, 1L);
+                });
             } 
 
             // Clicked icon to restore backup players ender chest
