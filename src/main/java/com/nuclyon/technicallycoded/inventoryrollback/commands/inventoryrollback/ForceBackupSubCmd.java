@@ -2,6 +2,7 @@ package com.nuclyon.technicallycoded.inventoryrollback.commands.inventoryrollbac
 
 import com.nuclyon.technicallycoded.inventoryrollback.InventoryRollbackPlus;
 import com.nuclyon.technicallycoded.inventoryrollback.commands.IRPCommand;
+import com.nuclyon.technicallycoded.inventoryrollback.folia.PlayerScheduler;
 import me.danjono.inventoryrollback.config.MessageData;
 import me.danjono.inventoryrollback.data.LogType;
 import me.danjono.inventoryrollback.inventory.SaveInventory;
@@ -39,8 +40,8 @@ public class ForceBackupSubCmd extends IRPCommand {
 
     private void forceBackupAll(CommandSender sender) {
         for (Player player : Bukkit.getOnlinePlayers()) {
-            new SaveInventory(player, LogType.FORCE, null, null)
-                    .snapshotAndSave(player.getInventory(), player.getEnderChest(), true);
+            PlayerScheduler.run(player, () -> new SaveInventory(player, LogType.FORCE, null, null)
+                    .snapshotAndSave(player.getInventory(), player.getEnderChest(), true));
         }
 
         sender.sendMessage(MessageData.getPluginPrefix() + MessageData.getForceBackupAll());
@@ -65,8 +66,8 @@ public class ForceBackupSubCmd extends IRPCommand {
         }
 
         Player player = (Player) offlinePlayer;
-        new SaveInventory(player, LogType.FORCE, null, null)
-                .snapshotAndSave(player.getInventory(), player.getEnderChest(), true);
+        PlayerScheduler.run(player, () -> new SaveInventory(player, LogType.FORCE, null, null)
+                .snapshotAndSave(player.getInventory(), player.getEnderChest(), true));
 
         sender.sendMessage(MessageData.getPluginPrefix() + MessageData.getForceBackupPlayer(offlinePlayer.getName()));
     }

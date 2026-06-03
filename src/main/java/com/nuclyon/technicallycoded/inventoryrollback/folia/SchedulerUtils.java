@@ -2,6 +2,7 @@ package com.nuclyon.technicallycoded.inventoryrollback.folia;
 
 import com.nuclyon.technicallycoded.inventoryrollback.InventoryRollbackPlus;
 import org.bukkit.Location;
+import org.bukkit.entity.Entity;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -18,6 +19,53 @@ public abstract class SchedulerUtils {
 
     private static FoliaSchedulerService service() {
         return new DirectFoliaSchedulerService(InventoryRollbackPlus.getInstance());
+    }
+
+
+    /**
+     * Runs a task on the owning region for an entity.
+     *
+     * @param entity The entity whose scheduler owns the task.
+     * @param task The task to run.
+     */
+    public static void runEntity(@NotNull Entity entity, @NotNull Runnable task) {
+        runEntity(entity, task, () -> { });
+    }
+
+    /**
+     * Runs a task on the owning region for an entity with a retired callback.
+     *
+     * @param entity The entity whose scheduler owns the task.
+     * @param task The task to run.
+     * @param retired Callback invoked if the entity retires before execution.
+     */
+    public static void runEntity(@NotNull Entity entity, @NotNull Runnable task, @Nullable Runnable retired) {
+        service().entity(entity, task, retired);
+    }
+
+    /**
+     * Runs a delayed task on the owning region for an entity with a retired callback.
+     *
+     * @param entity The entity whose scheduler owns the task.
+     * @param task The task to run.
+     * @param retired Callback invoked if the entity retires before execution.
+     * @param delay The delay in ticks before the task runs.
+     */
+    public static void runEntityLater(@NotNull Entity entity, @NotNull Runnable task, @Nullable Runnable retired, long delay) {
+        service().entityLater(entity, task, retired, delay);
+    }
+
+    /**
+     * Runs a repeating task on the owning region for an entity with a retired callback.
+     *
+     * @param entity The entity whose scheduler owns the task.
+     * @param runnable The runnable to run.
+     * @param retired Callback invoked if the entity retires before execution.
+     * @param delay The delay in ticks before the task runs.
+     * @param period The period in ticks between subsequent runs of the task.
+     */
+    public static void runEntityTimer(@NotNull Entity entity, @NotNull FoliaRunnable runnable, @Nullable Runnable retired, long delay, long period) {
+        runnable.setScheduledTask(service().entityTimer(entity, runnable, retired, delay, period));
     }
 
     /**
@@ -96,6 +144,17 @@ public abstract class SchedulerUtils {
             return;
         }
         service().region(loc, task);
+    }
+
+    /**
+     * Calls a task on the owning region for an entity.
+     *
+     * @param entity The entity whose scheduler owns the task.
+     * @param task The task to call.
+     * @return A future containing the task result.
+     */
+    public static <T> CompletableFuture<T> callEntityMethod(@NotNull Entity entity, @NotNull Callable<T> task) {
+        return service().entityFuture(entity, task);
     }
 
     /**

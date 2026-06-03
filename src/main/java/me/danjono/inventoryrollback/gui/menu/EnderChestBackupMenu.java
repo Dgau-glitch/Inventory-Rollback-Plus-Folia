@@ -2,6 +2,7 @@ package me.danjono.inventoryrollback.gui.menu;
 
 import com.nuclyon.technicallycoded.inventoryrollback.InventoryRollbackPlus;
 import com.nuclyon.technicallycoded.inventoryrollback.folia.FoliaRunnable;
+import com.nuclyon.technicallycoded.inventoryrollback.folia.PlayerScheduler;
 import com.nuclyon.technicallycoded.inventoryrollback.folia.SchedulerUtils;
 import com.tcoded.lightlibs.bukkitversion.MCVersion;
 import me.danjono.inventoryrollback.config.ConfigData;
@@ -91,7 +92,7 @@ public class EnderChestBackupMenu {
         try {
 
             // Add items, 5 per tick
-            SchedulerUtils.runTaskTimer(null, new FoliaRunnable() {
+            SchedulerUtils.runEntityTimer(staff, new FoliaRunnable() {
 
                 int invPosition = 0;
                 int itemPos = (pageNumber - 1) * 27;
@@ -113,9 +114,9 @@ public class EnderChestBackupMenu {
                         itemPos++;
                     }
                 }
-            }, 1, 1);
+            }, () -> { }, 1, 1);
         } catch (NullPointerException e) {
-            staff.sendMessage(MessageData.getPluginPrefix() + MessageData.getErrorInventory());
+            PlayerScheduler.sendMessage(staff, MessageData.getPluginPrefix() + MessageData.getErrorInventory());
             return;
         }
 

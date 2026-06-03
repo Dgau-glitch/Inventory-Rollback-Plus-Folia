@@ -18,13 +18,28 @@ import java.util.concurrent.CompletableFuture;
 public interface FoliaSchedulerService {
 
     @Nullable
-    ScheduledTask entity(@NotNull Entity entity, @NotNull Runnable task);
+    default ScheduledTask entity(@NotNull Entity entity, @NotNull Runnable task) {
+        return entity(entity, task, null);
+    }
 
     @Nullable
-    ScheduledTask entityLater(@NotNull Entity entity, @NotNull Runnable task, long delayTicks);
+    ScheduledTask entity(@NotNull Entity entity, @NotNull Runnable task, @Nullable Runnable retired);
 
     @Nullable
-    ScheduledTask entityTimer(@NotNull Entity entity, @NotNull Runnable task, long initialDelayTicks, long periodTicks);
+    default ScheduledTask entityLater(@NotNull Entity entity, @NotNull Runnable task, long delayTicks) {
+        return entityLater(entity, task, null, delayTicks);
+    }
+
+    @Nullable
+    ScheduledTask entityLater(@NotNull Entity entity, @NotNull Runnable task, @Nullable Runnable retired, long delayTicks);
+
+    @Nullable
+    default ScheduledTask entityTimer(@NotNull Entity entity, @NotNull Runnable task, long initialDelayTicks, long periodTicks) {
+        return entityTimer(entity, task, null, initialDelayTicks, periodTicks);
+    }
+
+    @Nullable
+    ScheduledTask entityTimer(@NotNull Entity entity, @NotNull Runnable task, @Nullable Runnable retired, long initialDelayTicks, long periodTicks);
 
     @NotNull
     <T> CompletableFuture<T> entityFuture(@NotNull Entity entity, @NotNull Callable<T> task);

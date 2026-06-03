@@ -2,6 +2,7 @@ package com.nuclyon.technicallycoded.inventoryrollback;
 
 import com.nuclyon.technicallycoded.inventoryrollback.UpdateChecker.UpdateResult;
 import com.nuclyon.technicallycoded.inventoryrollback.commands.Commands;
+import com.nuclyon.technicallycoded.inventoryrollback.folia.PlayerScheduler;
 import com.nuclyon.technicallycoded.inventoryrollback.folia.SchedulerUtils;
 import com.nuclyon.technicallycoded.inventoryrollback.util.TimeZoneUtil;
 import com.nuclyon.technicallycoded.inventoryrollback.util.test.SelfTestSerialization;
@@ -125,10 +126,12 @@ public class InventoryRollbackPlus extends InventoryRollback {
         // Save all inventories
         getLogger().info("Saving player inventories...");
         for (Player player : this.getServer().getOnlinePlayers()) {
-            if (player.hasPermission("inventoryrollbackplus.leavesave")) {
-                new SaveInventory(player, LogType.QUIT, null, null)
-                        .snapshotAndSave(player.getInventory(), player.getEnderChest(), false);
-            }
+            PlayerScheduler.run(player, () -> {
+                if (player.hasPermission("inventoryrollbackplus.leavesave")) {
+                    new SaveInventory(player, LogType.QUIT, null, null)
+                            .snapshotAndSave(player.getInventory(), player.getEnderChest(), false);
+                }
+            });
         }
         getLogger().info("Done saving player inventories!");
 

@@ -1,5 +1,6 @@
 package me.danjono.inventoryrollback.commands;
 
+import com.nuclyon.technicallycoded.inventoryrollback.folia.PlayerScheduler;
 import com.nuclyon.technicallycoded.inventoryrollback.folia.SchedulerUtils;
 import me.danjono.inventoryrollback.InventoryRollback;
 import me.danjono.inventoryrollback.config.ConfigData;
@@ -114,15 +115,15 @@ public class Commands extends ConfigData implements CommandExecutor, TabComplete
     private void openMainMenu(Player staff) {
         MainMenu menu = new MainMenu(staff, 1);
 
-        staff.openInventory(menu.getInventory());
-        SchedulerUtils.runTaskAsynchronously(menu::getMainMenu);
+        PlayerScheduler.openInventory(staff, menu.getInventory());
+        PlayerScheduler.run(staff, menu::getMainMenu);
     }
 
     private void openPlayerMenu(Player staff, OfflinePlayer offlinePlayer) {
         PlayerMenu menu = new PlayerMenu(staff, offlinePlayer);
 
-        staff.openInventory(menu.getInventory());
-        SchedulerUtils.runTaskAsynchronously(menu::getPlayerMenu);
+        PlayerScheduler.openInventory(staff, menu.getInventory());
+        PlayerScheduler.run(staff, menu::getPlayerMenu);
     }
 
     private void forceBackupCommand(CommandSender sender, String[] args) {
@@ -146,8 +147,8 @@ public class Commands extends ConfigData implements CommandExecutor, TabComplete
 
     private void forceBackupAll(CommandSender sender) {
         for (Player player : Bukkit.getOnlinePlayers()) {
-            new SaveInventory(player, LogType.FORCE, null, null)
-                    .snapshotAndSave(player.getInventory(), player.getEnderChest(), true);
+            PlayerScheduler.run(player, () -> new SaveInventory(player, LogType.FORCE, null, null)
+                    .snapshotAndSave(player.getInventory(), player.getEnderChest(), true));
         }
 
         sender.sendMessage(MessageData.getPluginPrefix() + MessageData.getForceBackupAll());
@@ -172,8 +173,8 @@ public class Commands extends ConfigData implements CommandExecutor, TabComplete
         }
 
         Player player = (Player) offlinePlayer;
-        new SaveInventory(player, LogType.FORCE, null, null)
-                .snapshotAndSave(player.getInventory(), player.getEnderChest(), true);
+        PlayerScheduler.run(player, () -> new SaveInventory(player, LogType.FORCE, null, null)
+                .snapshotAndSave(player.getInventory(), player.getEnderChest(), true));
 
         sender.sendMessage(MessageData.getPluginPrefix() + MessageData.getForceBackupPlayer(offlinePlayer.getName()));
     }

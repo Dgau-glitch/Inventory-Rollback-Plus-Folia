@@ -26,20 +26,20 @@ public class DirectFoliaSchedulerService implements FoliaSchedulerService {
 
     @Override
     @Nullable
-    public ScheduledTask entity(@NotNull Entity entity, @NotNull Runnable task) {
-        return entity.getScheduler().run(plugin, scheduledTask -> task.run(), null);
+    public ScheduledTask entity(@NotNull Entity entity, @NotNull Runnable task, @Nullable Runnable retired) {
+        return entity.getScheduler().run(plugin, scheduledTask -> task.run(), retired);
     }
 
     @Override
     @Nullable
-    public ScheduledTask entityLater(@NotNull Entity entity, @NotNull Runnable task, long delayTicks) {
-        return entity.getScheduler().runDelayed(plugin, scheduledTask -> task.run(), null, delayTicks);
+    public ScheduledTask entityLater(@NotNull Entity entity, @NotNull Runnable task, @Nullable Runnable retired, long delayTicks) {
+        return entity.getScheduler().runDelayed(plugin, scheduledTask -> task.run(), retired, delayTicks);
     }
 
     @Override
     @Nullable
-    public ScheduledTask entityTimer(@NotNull Entity entity, @NotNull Runnable task, long initialDelayTicks, long periodTicks) {
-        return entity.getScheduler().runAtFixedRate(plugin, scheduledTask -> task.run(), null, initialDelayTicks, periodTicks);
+    public ScheduledTask entityTimer(@NotNull Entity entity, @NotNull Runnable task, @Nullable Runnable retired, long initialDelayTicks, long periodTicks) {
+        return entity.getScheduler().runAtFixedRate(plugin, scheduledTask -> task.run(), retired, initialDelayTicks, periodTicks);
     }
 
     @Override
