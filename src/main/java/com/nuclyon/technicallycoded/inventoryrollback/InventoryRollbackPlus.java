@@ -2,7 +2,6 @@ package com.nuclyon.technicallycoded.inventoryrollback;
 
 import com.nuclyon.technicallycoded.inventoryrollback.UpdateChecker.UpdateResult;
 import com.nuclyon.technicallycoded.inventoryrollback.commands.Commands;
-import com.nuclyon.technicallycoded.inventoryrollback.folia.PlayerScheduler;
 import com.nuclyon.technicallycoded.inventoryrollback.folia.SchedulerUtils;
 import com.nuclyon.technicallycoded.inventoryrollback.util.TimeZoneUtil;
 import com.nuclyon.technicallycoded.inventoryrollback.util.test.SelfTestSerialization;
@@ -11,8 +10,6 @@ import com.tcoded.lightlibs.bukkitversion.MCVersion;
 import me.danjono.inventoryrollback.InventoryRollback;
 import me.danjono.inventoryrollback.config.ConfigData;
 import me.danjono.inventoryrollback.config.MessageData;
-import me.danjono.inventoryrollback.data.LogType;
-import me.danjono.inventoryrollback.inventory.SaveInventory;
 import me.danjono.inventoryrollback.listeners.ClickGUI;
 import me.danjono.inventoryrollback.listeners.EventLogs;
 import org.bstats.bukkit.Metrics;
@@ -22,7 +19,6 @@ import org.bukkit.ChatColor;
 import org.bukkit.command.ConsoleCommandSender;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.configuration.file.YamlConfiguration;
-import org.bukkit.entity.Player;
 import org.bukkit.event.HandlerList;
 
 import java.io.File;
@@ -101,17 +97,10 @@ public class InventoryRollbackPlus extends InventoryRollback {
         getLogger().info("Setting shutdown state");
         shuttingDown.set(true);
 
-        // Save all inventories
-        getLogger().info("Saving player inventories...");
-        for (Player player : this.getServer().getOnlinePlayers()) {
-            PlayerScheduler.run(player, () -> {
-                if (player.hasPermission("inventoryrollbackplus.leavesave")) {
-                    new SaveInventory(player, LogType.QUIT, null, null)
-                            .snapshotAndSave(player.getInventory(), player.getEnderChest(), false);
-                }
-            });
-        }
-        getLogger().info("Done saving player inventories!");
+        // Folia disables the plugin before onDisable() is called, so registering new entity/global/async
+        // tasks here throws IllegalPluginAccessException. Live player snapshots must be captured by
+        // player-owned event handlers (quit/world/death/force saves) before the disable lifecycle stage.
+        getLogger().info("Skipping final online-player snapshot scheduling during disable; Folia rejects new tasks after plugin disable begins.");
 
         // Unregister event listeners
         HandlerList.unregisterAll(this);

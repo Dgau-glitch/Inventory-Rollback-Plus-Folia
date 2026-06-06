@@ -37,6 +37,22 @@ class FoliaOwnershipStaticTest {
         assertTrue(violations.isEmpty(), "Unsafe production scheduler access found:\n" + String.join("\n", violations));
     }
 
+
+    @Test
+    void pluginDisableDoesNotRegisterNewSchedulerTasks() throws IOException {
+        String source = new String(Files.readAllBytes(Paths.get(
+                "src/main/java/com/nuclyon/technicallycoded/inventoryrollback/InventoryRollbackPlus.java")), StandardCharsets.UTF_8);
+        String onDisableBody = source.substring(source.indexOf("public void onDisable()"));
+        onDisableBody = onDisableBody.substring(0, onDisableBody.indexOf("public void setVersion"));
+
+        assertTrue(!onDisableBody.contains("PlayerScheduler.run"),
+                "onDisable must not register entity tasks because Folia has already disabled the plugin");
+        assertTrue(!onDisableBody.contains("SchedulerUtils.runTask("),
+                "onDisable must not register global or region tasks because Folia has already disabled the plugin");
+        assertTrue(onDisableBody.contains("SchedulerUtils.cancelPluginTasks()"),
+                "onDisable should only cancel already-owned scheduler tasks");
+    }
+
     @Test
     void restoreServiceKeepsStorageLoadAndPlayerMutationInSeparateStages() throws IOException {
         String source = new String(Files.readAllBytes(Paths.get(
