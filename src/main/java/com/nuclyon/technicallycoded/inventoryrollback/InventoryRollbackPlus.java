@@ -7,12 +7,9 @@ import com.nuclyon.technicallycoded.inventoryrollback.util.TimeZoneUtil;
 import com.nuclyon.technicallycoded.inventoryrollback.util.test.SelfTestSerialization;
 import com.tcoded.lightlibs.bukkitversion.BukkitVersion;
 import com.tcoded.lightlibs.bukkitversion.MCVersion;
-import io.papermc.lib.PaperLib;
 import me.danjono.inventoryrollback.InventoryRollback;
 import me.danjono.inventoryrollback.config.ConfigData;
 import me.danjono.inventoryrollback.config.MessageData;
-import me.danjono.inventoryrollback.data.LogType;
-import me.danjono.inventoryrollback.inventory.SaveInventory;
 import me.danjono.inventoryrollback.listeners.ClickGUI;
 import me.danjono.inventoryrollback.listeners.EventLogs;
 import org.bstats.bukkit.Metrics;
@@ -22,7 +19,6 @@ import org.bukkit.ChatColor;
 import org.bukkit.command.ConsoleCommandSender;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.configuration.file.YamlConfiguration;
-import org.bukkit.entity.Player;
 import org.bukkit.event.HandlerList;
 
 import java.io.File;
@@ -31,8 +27,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class InventoryRollbackPlus extends InventoryRollback {
 
     private static InventoryRollbackPlus instancePlus;
-    public static boolean usingFolia = false;
-
     private TimeZoneUtil timeZoneUtil = null;
 
     private ConfigData configData;
@@ -42,16 +36,6 @@ public class InventoryRollbackPlus extends InventoryRollback {
 
     public static InventoryRollbackPlus getInstance() {
         return instancePlus;
-    }
-
-    @Override
-    public void onLoad() {
-        try {
-            Class.forName("io.papermc.paper.threadedregions.scheduler.RegionScheduler");
-            usingFolia = true;
-        } catch (ClassNotFoundException e) {
-            usingFolia = false;
-        }
     }
 
     @Override
@@ -103,15 +87,6 @@ public class InventoryRollbackPlus extends InventoryRollback {
         // Run after all plugin enable
         SchedulerUtils.runTask(null, EventLogs::patchLowestHandlers);
 
-        // PaperLib
-        if (!PaperLib.isPaper()) {
-            this.getLogger().info("----------------------------------------");
-            this.getLogger().info("We recommend updating your server to use Paper :)");
-            this.getLogger().info("Paper significantly reduces lag spikes among other benefits.");
-            this.getLogger().info("Learn more at: https://papermc.io/");
-            this.getLogger().info("----------------------------------------");
-        }
-
         // Run self-tests
         SelfTestSerialization.runTests();
     }
@@ -122,21 +97,16 @@ public class InventoryRollbackPlus extends InventoryRollback {
         getLogger().info("Setting shutdown state");
         shuttingDown.set(true);
 
-        // Save all inventories
-        getLogger().info("Saving player inventories...");
-        for (Player player : this.getServer().getOnlinePlayers()) {
-            if (player.hasPermission("inventoryrollbackplus.leavesave")) {
-                new SaveInventory(player, LogType.QUIT, null, null)
-                        .snapshotAndSave(player.getInventory(), player.getEnderChest(), false);
-            }
-        }
-        getLogger().info("Done saving player inventories!");
+        // Folia disables the plugin before onDisable() is called, so registering new entity/global/async
+        // tasks here throws IllegalPluginAccessException. Live player snapshots must be captured by
+        // player-owned event handlers (quit/world/death/force saves) before the disable lifecycle stage.
+        getLogger().info("Skipping final online-player snapshot scheduling during disable; Folia rejects new tasks after plugin disable begins.");
 
         // Unregister event listeners
         HandlerList.unregisterAll(this);
 
-        // Cancel tasks
-        if(!usingFolia) this.getServer().getScheduler().cancelTasks(this);
+        // Cancel plugin-owned global and async tasks through Folia schedulers.
+        SchedulerUtils.cancelPluginTasks();
 
         // Clear instance references
         instancePlus = null;

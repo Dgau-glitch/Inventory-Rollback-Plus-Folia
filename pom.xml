@@ -21,10 +21,6 @@
 
     <repositories>
         <repository>
-            <id>spigot-repo</id>
-            <url>https://hub.spigotmc.org/nexus/content/repositories/snapshots/</url>
-        </repository>
-        <repository>
             <id>CodeMC</id>
             <url>https://repo.codemc.org/repository/maven-public</url>
         </repository>
@@ -33,56 +29,25 @@
             <url>https://repo.papermc.io/repository/maven-public/</url>
         </repository>
         <repository>
-            <id>maven_central</id>
-            <name>Maven Central</name>
-            <url>https://repo.maven.apache.org/maven2/</url>
-        </repository>
-        <repository>
-            <id>jitpack</id>
-            <url>https://jitpack.io</url>
-        </repository>
-        <repository>
             <id>tcoded-releases</id>
             <url>https://repo.tcoded.com/releases/</url>
         </repository>
     </repositories>
 
     <dependencies>
-        <!-- Spigot API -->
+        <!-- Folia API (Maven equivalent of Gradle compileOnly) -->
         <dependency>
-            <groupId>org.spigotmc</groupId>
-            <artifactId>spigot-api</artifactId>
-            <version>1.20.5-R0.1-SNAPSHOT</version>
+            <groupId>dev.folia</groupId>
+            <artifactId>folia-api</artifactId>
+            <version>1.21.11-R0.1-SNAPSHOT</version>
             <scope>provided</scope>
         </dependency>
-        <!--<dependency>
-            <groupId>org.spigotmc</groupId>
-            <artifactId>spigot</artifactId>
-            <version>1.19.3</version>
-            <scope>system</scope>
-            <type>jar</type>
-            <systemPath>${project.basedir}/lib/spigot-1.19.3.jar</systemPath>
-            <optional>true</optional>
-        </dependency>-->
         <!-- bStats API -->
         <dependency>
             <groupId>org.bstats</groupId>
             <artifactId>bstats-bukkit</artifactId>
             <version>3.0.2</version>
             <scope>compile</scope>
-        </dependency>
-        <!-- Paper-Lib -->
-        <dependency>
-            <groupId>io.papermc</groupId>
-            <artifactId>paperlib</artifactId>
-            <version>1.0.6</version>
-            <scope>compile</scope>
-        </dependency>
-        <dependency>
-            <groupId>dev.folia</groupId>
-            <artifactId>folia-api</artifactId>
-            <version>1.21.4-R0.1-SNAPSHOT</version>
-            <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>org.jetbrains</groupId>
@@ -160,15 +125,6 @@
                     <dependencyReducedPomLocation>${project.build.directory}/dependency-reduced-pom.xml</dependencyReducedPomLocation>
                     <filters>
                         <filter>
-                            <artifact>io.papermc:paperlib</artifact>
-                            <includes>
-                                <include>io/papermc/lib/**</include>
-                            </includes>
-                            <excludes>
-                                <exclude>**/MANIFEST.MF</exclude>
-                            </excludes>
-                        </filter>
-                        <filter>
                             <artifact>org.bstats:bstats-bukkit</artifact>
                             <includes>
                                 <include>org/bstats/**</include>
@@ -188,10 +144,6 @@
                         <relocation>
                             <pattern>org.bstats</pattern>
                             <shadedPattern>${project.groupId}.bstats</shadedPattern>
-                        </relocation>
-                        <relocation>
-                            <pattern>io.papermc.lib</pattern>
-                            <shadedPattern>${project.groupId}.paperlib</shadedPattern>
                         </relocation>
                         <relocation>
                             <pattern>com.tcoded.lightlibs.bukkitversion</pattern>

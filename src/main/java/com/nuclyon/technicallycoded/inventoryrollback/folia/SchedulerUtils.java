@@ -1,261 +1,180 @@
 package com.nuclyon.technicallycoded.inventoryrollback.folia;
 
 import com.nuclyon.technicallycoded.inventoryrollback.InventoryRollbackPlus;
-import io.papermc.paper.threadedregions.scheduler.GlobalRegionScheduler;
-import io.papermc.paper.threadedregions.scheduler.RegionScheduler;
-import io.papermc.paper.threadedregions.scheduler.ScheduledTask;
-import org.bukkit.Bukkit;
 import org.bukkit.Location;
-import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.entity.Entity;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.lang.reflect.Method;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Future;
-
-import static com.nuclyon.technicallycoded.inventoryrollback.InventoryRollbackPlus.usingFolia;
 
 /**
- * Utility class for scheduling tasks in a Paper/Folia server.
+ * Compatibility adapter for legacy call sites.
+ * <p>
+ * New code should depend on {@link FoliaSchedulerService} and choose entity, region,
+ * global, or async ownership explicitly instead of routing work through this class.
  */
 public abstract class SchedulerUtils {
 
+    private static FoliaSchedulerService service() {
+        return new DirectFoliaSchedulerService(InventoryRollbackPlus.getInstance());
+    }
+
+
     /**
-     * Schedules a task to run later on the main server thread.
-     * @param loc The location where the task should run, or null for the main thread.
-     * @param task   The task to run.
-     * @param delay  The delay in ticks before the task runs.
+     * Runs a task on the owning region for an entity.
+     *
+     * @param entity The entity whose scheduler owns the task.
+     * @param task The task to run.
+     */
+    public static void runEntity(@NotNull Entity entity, @NotNull Runnable task) {
+        runEntity(entity, task, () -> { });
+    }
+
+    /**
+     * Runs a task on the owning region for an entity with a retired callback.
+     *
+     * @param entity The entity whose scheduler owns the task.
+     * @param task The task to run.
+     * @param retired Callback invoked if the entity retires before execution.
+     */
+    public static void runEntity(@NotNull Entity entity, @NotNull Runnable task, @Nullable Runnable retired) {
+        service().entity(entity, task, retired);
+    }
+
+    /**
+     * Runs a delayed task on the owning region for an entity with a retired callback.
+     *
+     * @param entity The entity whose scheduler owns the task.
+     * @param task The task to run.
+     * @param retired Callback invoked if the entity retires before execution.
+     * @param delay The delay in ticks before the task runs.
+     */
+    public static void runEntityLater(@NotNull Entity entity, @NotNull Runnable task, @Nullable Runnable retired, long delay) {
+        service().entityLater(entity, task, retired, delay);
+    }
+
+    /**
+     * Runs a repeating task on the owning region for an entity with a retired callback.
+     *
+     * @param entity The entity whose scheduler owns the task.
+     * @param runnable The runnable to run.
+     * @param retired Callback invoked if the entity retires before execution.
+     * @param delay The delay in ticks before the task runs.
+     * @param period The period in ticks between subsequent runs of the task.
+     */
+    public static void runEntityTimer(@NotNull Entity entity, @NotNull FoliaRunnable runnable, @Nullable Runnable retired, long delay, long period) {
+        runnable.setScheduledTask(service().entityTimer(entity, runnable, retired, delay, period));
+    }
+
+    /**
+     * Schedules a task on the owning region for the location, or on the global region when location is null.
+     *
+     * @param loc The location whose region should own the task, or null for the global region.
+     * @param task The task to run.
+     * @param delay The delay in ticks before the task runs.
      */
     public static void runTaskLater(@Nullable Location loc, @NotNull Runnable task, long delay) {
-        JavaPlugin plugin = InventoryRollbackPlus.getInstance();
-        if (usingFolia) {
-            try {
-                if (loc != null) {
-                    Method getRegionScheduler = plugin.getServer().getClass().getMethod("getRegionScheduler");
-                    RegionScheduler regionScheduler = (RegionScheduler) getRegionScheduler.invoke(plugin.getServer());
-                    regionScheduler.runDelayed(
-                            plugin,
-                            loc,
-                            (ScheduledTask scheduledTask) -> task.run(),
-                            delay
-                    );
-                } else {
-                    Method getGlobalScheduler = plugin.getServer().getClass().getMethod("getGlobalRegionScheduler");
-                    GlobalRegionScheduler globalScheduler = (GlobalRegionScheduler) getGlobalScheduler.invoke(plugin.getServer());
-                    globalScheduler.runDelayed(
-                            plugin,
-                            (ScheduledTask scheduledTask) -> task.run(),
-                            delay
-                    );
-                }
-                return;
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
+        if (loc == null) {
+            service().globalLater(task, delay);
+            return;
         }
-        plugin.getServer().getScheduler().runTaskLater(plugin, task, delay);
+        service().regionLater(loc, task, delay);
     }
 
     /**
-     * Schedules a task to run later asynchronously on the main server thread.
-     * @param loc The location where the task should run, or null for the main thread.
-     * @param task   The task to run.
-     * @param delay  The delay in ticks before the task runs.
+     * Legacy async-delayed adapter. The location parameter is ignored because async work has no region owner.
+     *
+     * @param loc Ignored legacy parameter.
+     * @param task The task to run.
+     * @param delay The delay in ticks before the task runs.
      */
+    @Deprecated
     public static void runTaskLaterAsynchronously(@Nullable Location loc, @NotNull Runnable task, long delay) {
-        JavaPlugin plugin = InventoryRollbackPlus.getInstance();
-        if (usingFolia) {
-            try {
-                if (loc != null) {
-                    Method getRegionScheduler = plugin.getServer().getClass().getMethod("getRegionScheduler");
-                    RegionScheduler regionScheduler = (RegionScheduler) getRegionScheduler.invoke(plugin.getServer());
-                    regionScheduler.runDelayed(
-                            plugin,
-                            loc,
-                            (ScheduledTask scheduledTask) -> task.run(),
-                            delay
-                    );
-                } else {
-                    Method getGlobalScheduler = plugin.getServer().getClass().getMethod("getGlobalRegionScheduler");
-                    GlobalRegionScheduler globalScheduler = (GlobalRegionScheduler) getGlobalScheduler.invoke(plugin.getServer());
-                    globalScheduler.runDelayed(
-                            plugin,
-                            (ScheduledTask scheduledTask) -> task.run(),
-                            delay
-                    );
-                }
-                return;
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }
-        plugin.getServer().getScheduler().runTaskLaterAsynchronously(plugin, task, delay);
+        service().asyncLater(task, delay);
     }
 
     /**
-     * Schedules a task to run repeatedly on the main server thread.
-     * @param loc The location where the task should run, or null for the main thread.
-     * @param runnable   The BukkitRunnable to run.
-     * @param delay  The delay in ticks before the task runs.
+     * Schedules a repeating task on the owning region for the location, or on the global region when location is null.
+     *
+     * @param loc The location whose region should own the task, or null for the global region.
+     * @param runnable The runnable to run.
+     * @param delay The delay in ticks before the task runs.
      * @param period The period in ticks between subsequent runs of the task.
      */
     public static void runTaskTimer(@Nullable Location loc, @NotNull FoliaRunnable runnable, long delay, long period) {
-        JavaPlugin plugin = InventoryRollbackPlus.getInstance();
-        if (usingFolia) {
-            try {
-                ScheduledTask task;
-                if (loc != null) {
-                    Method getRegionScheduler = plugin.getServer().getClass().getMethod("getRegionScheduler");
-                    RegionScheduler regionScheduler = (RegionScheduler) getRegionScheduler.invoke(plugin.getServer());
-                    task = regionScheduler.runAtFixedRate(
-                            plugin,
-                            loc,
-                            (ScheduledTask t) -> runnable.run(),
-                            delay,
-                            period
-                    );
-                } else {
-                    Method getGlobalScheduler = plugin.getServer().getClass().getMethod("getGlobalRegionScheduler");
-                    GlobalRegionScheduler globalScheduler = (GlobalRegionScheduler) getGlobalScheduler.invoke(plugin.getServer());
-                    task = globalScheduler.runAtFixedRate(
-                            plugin,
-                            (ScheduledTask t) -> runnable.run(),
-                            delay,
-                            period
-                    );
-                }
-                runnable.setScheduledTask(task);
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
+        if (loc == null) {
+            runnable.setScheduledTask(service().globalTimer(runnable, delay, period));
             return;
         }
-        runnable.runTaskTimer(plugin, delay, period);
+        runnable.setScheduledTask(service().regionTimer(loc, runnable, delay, period));
     }
 
     /**
-     * Schedules a task to run repeatedly on the main server thread asynchronously.
-     * @param runnable The FoliaRunnable to run.
-     * @param delay  The delay in ticks before the task runs.
+     * Legacy async repeating adapter.
+     *
+     * @param runnable The runnable to run.
+     * @param delay The delay in ticks before the task runs.
      * @param period The period in ticks between subsequent runs of the task.
      */
+    @Deprecated
     public static void runTaskTimerAsynchronously(@NotNull FoliaRunnable runnable, long delay, long period) {
-        JavaPlugin plugin = InventoryRollbackPlus.getInstance();
-        if (usingFolia) {
-            try {
-                Method getGlobalScheduler = plugin.getServer().getClass().getMethod("getGlobalRegionScheduler");
-                GlobalRegionScheduler globalScheduler = (GlobalRegionScheduler) getGlobalScheduler.invoke(plugin.getServer());
-                class AsyncRepeatingTask {
-                    private ScheduledTask task;
-                    void start(long initialDelay) {
-                        task = globalScheduler.runDelayed(plugin, (ScheduledTask t) -> {
-                            runnable.run();
-                            start(period);
-                        }, initialDelay);
-                        runnable.setScheduledTask(task);
-                    }
-                }
-                new AsyncRepeatingTask().start(delay);
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-            return;
-        }
-        runnable.runTaskTimerAsynchronously(plugin, delay, period);
+        runnable.setScheduledTask(service().asyncTimer(runnable, delay, period));
     }
 
     /**
-     * Runs a task asynchronously on the main server thread.
+     * Runs work asynchronously from the server tick process.
+     *
      * @param task The task to run.
      */
     public static void runTaskAsynchronously(@NotNull Runnable task) {
-        JavaPlugin plugin = InventoryRollbackPlus.getInstance();
-        if (usingFolia) {
-            try {
-                Method getGlobalScheduler = plugin.getServer().getClass().getMethod("getGlobalRegionScheduler");
-                GlobalRegionScheduler globalScheduler = (GlobalRegionScheduler) getGlobalScheduler.invoke(plugin.getServer());
-                globalScheduler.execute(plugin, task);
-                return;
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }
-        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, task);
+        service().async(task);
     }
 
     /**
-     * Runs a task on the main server thread at a specific location or globally.
-     * @param loc The location where the task should run, or null for the main thread.
+     * Cancels plugin-owned global and async scheduler tasks through Folia's typed schedulers.
+     */
+    public static void cancelPluginTasks() {
+        service().cancelPluginTasks();
+    }
+
+    /**
+     * Runs a task on the owning region for the location, or on the global region when location is null.
+     *
+     * @param loc The location whose region should own the task, or null for the global region.
      * @param task The task to run.
      */
     public static void runTask(@Nullable Location loc, @NotNull Runnable task) {
-        JavaPlugin plugin = InventoryRollbackPlus.getInstance();
-        if (usingFolia) {
-            try {
-                if (loc != null) {
-                    Method getRegionScheduler = plugin.getServer().getClass().getMethod("getRegionScheduler");
-                    RegionScheduler regionScheduler = (RegionScheduler) getRegionScheduler.invoke(plugin.getServer());
-                    regionScheduler.execute(plugin, loc, task);
-                } else {
-                    Method getGlobalScheduler = plugin.getServer().getClass().getMethod("getGlobalRegionScheduler");
-                    GlobalRegionScheduler globalScheduler = (GlobalRegionScheduler) getGlobalScheduler.invoke(plugin.getServer());
-                    globalScheduler.execute(plugin, task);
-                }
-                return;
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
+        if (loc == null) {
+            service().global(task);
+            return;
         }
-        plugin.getServer().getScheduler().runTask(plugin, task);
+        service().region(loc, task);
     }
 
+    /**
+     * Calls a task on the owning region for an entity.
+     *
+     * @param entity The entity whose scheduler owns the task.
+     * @param task The task to call.
+     * @return A future containing the task result.
+     */
+    public static <T> CompletableFuture<T> callEntityMethod(@NotNull Entity entity, @NotNull Callable<T> task) {
+        return service().entityFuture(entity, task);
+    }
+
+    /**
+     * Calls a task on the owning region for the location, or on the global region when location is null.
+     *
+     * @param loc The location whose region should own the task, or null for the global region.
+     * @param task The task to call.
+     * @return A future containing the task result.
+     */
     public static <T> CompletableFuture<T> callSyncMethod(@Nullable Location loc, @NotNull Callable<T> task) {
-        JavaPlugin plugin = InventoryRollbackPlus.getInstance();
-        if (usingFolia) {
-            CompletableFuture<T> future = new CompletableFuture<>();
-            try {
-                if (loc != null) {
-                    Method getRegionScheduler = plugin.getServer().getClass().getMethod("getRegionScheduler");
-                    RegionScheduler regionScheduler = (RegionScheduler) getRegionScheduler.invoke(plugin.getServer());
-                    regionScheduler.execute(plugin, loc, () -> {
-                        try {
-                            future.complete(task.call());
-                        } catch (Exception e) {
-                            future.completeExceptionally(e);
-                        }
-                    });
-                } else {
-                    Method getGlobalScheduler = plugin.getServer().getClass().getMethod("getGlobalRegionScheduler");
-                    GlobalRegionScheduler globalScheduler = (GlobalRegionScheduler) getGlobalScheduler.invoke(plugin.getServer());
-                    globalScheduler.execute(plugin, () -> {
-                        try {
-                            future.complete(task.call());
-                        } catch (Exception e) {
-                            future.completeExceptionally(e);
-                        }
-                    });
-                }
-            } catch (Exception e) {
-                future.completeExceptionally(e);
-            }
-            return future;
+        if (loc == null) {
+            return service().globalFuture(task);
         }
-        CompletableFuture<T> cf = new CompletableFuture<>();
-        try {
-            Future<T> bukkitFuture = plugin.getServer().getScheduler().callSyncMethod(plugin, task);
-            plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
-                try {
-                    T result = bukkitFuture.get();
-                    cf.complete(result);
-                } catch (Throwable ex) {
-                    cf.completeExceptionally(ex);
-                }
-            });
-        } catch (Throwable e) {
-            cf.completeExceptionally(e);
-        }
-        return cf;
+        return service().regionFuture(loc, task);
     }
 }

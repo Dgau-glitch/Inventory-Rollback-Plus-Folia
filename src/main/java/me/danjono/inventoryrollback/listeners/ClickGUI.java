@@ -3,10 +3,10 @@ package me.danjono.inventoryrollback.listeners;
 import com.nuclyon.technicallycoded.inventoryrollback.InventoryRollbackPlus;
 import com.nuclyon.technicallycoded.inventoryrollback.customdata.CustomDataItemEditor;
 import com.nuclyon.technicallycoded.inventoryrollback.folia.FoliaRunnable;
+import com.nuclyon.technicallycoded.inventoryrollback.folia.PlayerScheduler;
 import com.nuclyon.technicallycoded.inventoryrollback.folia.SchedulerUtils;
 import com.tcoded.lightlibs.bukkitversion.BukkitVersion;
 import com.tcoded.lightlibs.bukkitversion.MCVersion;
-import io.papermc.lib.PaperLib;
 import me.danjono.inventoryrollback.config.ConfigData;
 import me.danjono.inventoryrollback.config.MessageData;
 import me.danjono.inventoryrollback.config.SoundData;
@@ -15,7 +15,7 @@ import me.danjono.inventoryrollback.data.PlayerData;
 import me.danjono.inventoryrollback.gui.Buttons;
 import me.danjono.inventoryrollback.gui.InventoryName;
 import me.danjono.inventoryrollback.gui.menu.*;
-import me.danjono.inventoryrollback.inventory.RestoreInventory;
+import me.danjono.inventoryrollback.services.RestoreService;
 import org.bukkit.*;
 import org.bukkit.block.ShulkerBox;
 import org.bukkit.entity.Player;
@@ -31,11 +31,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.ExecutionException;
 
 public class ClickGUI implements Listener {
 
     private final InventoryRollbackPlus main;
+    private final RestoreService restoreService;
 
     private static boolean isLocationAvailable(Location location) {
         return location != null;
@@ -43,6 +43,7 @@ public class ClickGUI implements Listener {
 
     public ClickGUI() {
         this.main = InventoryRollbackPlus.getInstance();
+        this.restoreService = new RestoreService(main);
     }
 
     @EventHandler
@@ -138,16 +139,16 @@ public class ClickGUI implements Listener {
                 //Selected to go back to main menu
                 MainMenu menu = new MainMenu(staff, page);
 
-                staff.openInventory(menu.getInventory());
-                SchedulerUtils.runTaskAsynchronously(menu::getMainMenu);
+                PlayerScheduler.openInventory(staff, menu.getInventory());
+                PlayerScheduler.run(staff, menu::getMainMenu);
             } 
             //Clicked a player head
             else {
                 OfflinePlayer offlinePlayer = Bukkit.getOfflinePlayer(UUID.fromString(nbt.getString("uuid")));
                 PlayerMenu menu = new PlayerMenu(staff, offlinePlayer);
 
-                staff.openInventory(menu.getInventory());
-                SchedulerUtils.runTaskAsynchronously(menu::getPlayerMenu);
+                PlayerScheduler.openInventory(staff, menu.getInventory());
+                menu.populatePlayerMenuAsync();
             }
         } else {
             if (e.getRawSlot() >= e.getInventory().getSize() && !e.isShiftClick()) {
@@ -172,14 +173,14 @@ public class ClickGUI implements Listener {
             if (e.getRawSlot() == 0) {
                 MainMenu menu = new MainMenu(staff, 1);
 
-                staff.openInventory(menu.getInventory());
-                SchedulerUtils.runTaskAsynchronously(menu::getMainMenu);
+                PlayerScheduler.openInventory(staff, menu.getInventory());
+                PlayerScheduler.run(staff, menu::getMainMenu);
             } else {
                 LogType logType = LogType.valueOf(nbt.getString("logType"));
                 RollbackListMenu menu = new RollbackListMenu(staff, offlinePlayer, logType, 1);
 
-                staff.openInventory(menu.getInventory());
-                SchedulerUtils.runTaskAsynchronously(menu::showBackups);
+                PlayerScheduler.openInventory(staff, menu.getInventory());
+                menu.populateBackupsAsync();
             }
 
         } else {
@@ -211,27 +212,18 @@ public class ClickGUI implements Listener {
                         // Init from MySQL or, if YAML, init & load config file
                         PlayerData data = new PlayerData(uuid, logType, timestamp);
 
-                        // Get from MySQL
-                        if (ConfigData.getSaveType() == ConfigData.SaveType.MYSQL) {
-                            try {
-                                data.getAllBackupData().get();
-                            } catch (ExecutionException | InterruptedException ex) {
-                                ex.printStackTrace();
-                            }
-                        }
+                        loadAllBackupData(data);
 
-                        // Create inventory
-                        MainInventoryBackupMenu menu = new MainInventoryBackupMenu(staff, data, location);
-
-                        SchedulerUtils.callSyncMethod(
-                                e.getWhoClicked().getLocation(),
-                                () -> staff.openInventory(menu.getInventory())
-                        ).whenComplete((view, ex) -> {
+                        PlayerScheduler.call(staff, () -> {
+                            MainInventoryBackupMenu menu = new MainInventoryBackupMenu(staff, data, location);
+                            staff.openInventory(menu.getInventory());
+                            return menu;
+                        }).whenComplete((menu, ex) -> {
                             if (ex != null) {
                                 ex.printStackTrace();
                                 return;
                             }
-                            if (view == null) {
+                            if (menu == null) {
                                 return;
                             }
                             menu.showBackupItems();
@@ -249,14 +241,14 @@ public class ClickGUI implements Listener {
                 if (page == 0) {
                     PlayerMenu menu = new PlayerMenu(staff, player);
 
-                    staff.openInventory(menu.getInventory());
-                    SchedulerUtils.runTaskAsynchronously(menu::getPlayerMenu);
+                    PlayerScheduler.openInventory(staff, menu.getInventory());
+                    menu.populatePlayerMenuAsync();
                 } else {
                     LogType logType = LogType.valueOf(nbt.getString("logType"));
                     RollbackListMenu menu = new RollbackListMenu(staff, player, logType, page);
 
-                    staff.openInventory(menu.getInventory());
-                    SchedulerUtils.runTaskAsynchronously(menu::showBackups);
+                    PlayerScheduler.openInventory(staff, menu.getInventory());
+                    menu.populateBackupsAsync();
                 }
             }	
         } else {
@@ -283,8 +275,8 @@ public class ClickGUI implements Listener {
             if (icon.getType().equals(Buttons.getPageSelectorIcon())) {
                 RollbackListMenu menu = new RollbackListMenu(staff, offlinePlayer, logType, 1);
 
-                staff.openInventory(menu.getInventory());
-                SchedulerUtils.runTaskAsynchronously(menu::showBackups);
+                PlayerScheduler.openInventory(staff, menu.getInventory());
+                menu.populateBackupsAsync();
             }
 
             //Click on page selector button to go back to rollback menu
@@ -306,14 +298,7 @@ public class ClickGUI implements Listener {
                     // Init from MySQL or, if YAML, init & load config file
                     PlayerData data = new PlayerData(offlinePlayer, logType, timestamp);
 
-                    // Get data if using MySQL
-                    if (ConfigData.getSaveType() == ConfigData.SaveType.MYSQL) {
-                        try {
-                            data.getAllBackupData().get();
-                        } catch (ExecutionException | InterruptedException ex) {
-                            ex.printStackTrace();
-                        }
-                    }
+                    loadAllBackupData(data);
 
                     ItemStack[] mainInventory = data.getMainInventory();
                     ItemStack[] extraItems = data.getArmour();
@@ -334,39 +319,11 @@ public class ClickGUI implements Listener {
 
                     System.arraycopy(hotBar, 0, firstShulkerContents, 0, hotBar.length);
                     System.arraycopy(extraItems, 0, firstShulkerContents, 9, Math.min(extraItems.length, 18));
-
                     System.arraycopy(invContents, 0, secondShulkerContents, 0, Math.min(invContents.length, 27));
 
-                    ItemStack firstShulker = new ItemStack(Material.SHULKER_BOX);
-                    ItemStack secondShulker = new ItemStack(Material.SHULKER_BOX);
-
-                    ItemMeta firstMeta = firstShulker.getItemMeta();
-                    if (firstMeta instanceof BlockStateMeta) {
-                        BlockStateMeta blockMeta = (BlockStateMeta) firstMeta;
-                        if (blockMeta.getBlockState() instanceof ShulkerBox) {
-                            ShulkerBox shulkerBox = (ShulkerBox) blockMeta.getBlockState();
-                            shulkerBox.getInventory().setContents(firstShulkerContents);
-                            blockMeta.setBlockState(shulkerBox);
-                            blockMeta.setDisplayName(MessageData.getShulkerBoxFirstShulkerName());
-                            blockMeta.setLore(MessageData.getShulkerBoxFirstShulkerLore());
-                            firstShulker.setItemMeta(blockMeta);
-                        }
-                    }
-
-                    ItemMeta secondMeta = secondShulker.getItemMeta();
-                    if (secondMeta instanceof BlockStateMeta) {
-                        BlockStateMeta blockMeta = (BlockStateMeta) secondMeta;
-                        if (blockMeta.getBlockState() instanceof ShulkerBox) {
-                            ShulkerBox shulkerBox = (ShulkerBox) blockMeta.getBlockState();
-                            shulkerBox.getInventory().setContents(secondShulkerContents);
-                            blockMeta.setBlockState(shulkerBox);
-                            blockMeta.setDisplayName(MessageData.getShulkerBoxSecondShulkerName());
-                            blockMeta.setLore(MessageData.getShulkerBoxSecondShulkerLore());
-                            secondShulker.setItemMeta(blockMeta);
-                        }
-                    }
-
-                    SchedulerUtils.runTask(staff.getLocation(), () -> {
+                    PlayerScheduler.run(staff, () -> {
+                        ItemStack firstShulker = createShulker(firstShulkerContents, MessageData.getShulkerBoxFirstShulkerName(), MessageData.getShulkerBoxFirstShulkerLore());
+                        ItemStack secondShulker = createShulker(secondShulkerContents, MessageData.getShulkerBoxSecondShulkerName(), MessageData.getShulkerBoxSecondShulkerLore());
                         staff.getInventory().addItem(firstShulker, secondShulker);
                         staff.closeInventory();
                     });
@@ -381,62 +338,7 @@ public class ClickGUI implements Listener {
                     return;
                 }
 
-                if (offlinePlayer.isOnline()) {
-                    Player player = (Player) offlinePlayer;
-
-                    SchedulerUtils.runTaskAsynchronously(new FoliaRunnable() {
-                        @Override
-                        public void run() {
-                            // Init from MySQL or, if YAML, init & load config file
-                            PlayerData data = new PlayerData(offlinePlayer, logType, timestamp);
-
-                            // Get data if using MySQL
-                            if (ConfigData.getSaveType() == ConfigData.SaveType.MYSQL) {
-                                try {
-                                    data.getAllBackupData().get();
-                                } catch (ExecutionException | InterruptedException ex) {
-                                    ex.printStackTrace();
-                                }
-                            }
-
-                            ItemStack[] inventory = data.getMainInventory();
-                            ItemStack[] armour = data.getArmour();
-
-                            // Place inventory items sync (compressed code)
-                            SchedulerUtils.callSyncMethod(e.getWhoClicked().getLocation(), () -> {
-                                player.getInventory().setContents(inventory);
-                                return null;
-                            }).whenComplete((res, ex) -> {
-                                if (ex != null) ex.printStackTrace();
-                                else {
-                                    if (main.getVersion().lessOrEqThan(BukkitVersion.v1_8_R3)) {
-                                        SchedulerUtils.callSyncMethod(e.getWhoClicked().getLocation(), () -> {
-                                            player.getInventory().setArmorContents(armour);
-                                            return null;
-                                        }).whenComplete((r, e) -> {
-                                            if (e != null) e.printStackTrace();
-                                        });
-                                    }
-                                    if (SoundData.isInventoryRestoreEnabled()) {
-                                        SchedulerUtils.callSyncMethod(e.getWhoClicked().getLocation(), () -> {
-                                            player.playSound(player.getLocation(), SoundData.getInventoryRestored(), 1, 1);
-                                            return null;
-                                        }).whenComplete((r, e) -> {
-                                            if (e != null) e.printStackTrace();
-                                        });
-                                    }
-
-                                    player.sendMessage(MessageData.getPluginPrefix() + MessageData.getMainInventoryRestoredPlayer(staff.getName()));
-                                    if (!staff.getUniqueId().equals(player.getUniqueId()))
-                                        staff.sendMessage(MessageData.getPluginPrefix() + MessageData.getMainInventoryRestored(offlinePlayer.getName()));
-                                }
-                            });
-                        }
-                    });
-
-                } else {
-                    staff.sendMessage(MessageData.getPluginPrefix() + MessageData.getMainInventoryNotOnline(offlinePlayer.getName()));
-                }
+                restoreService.restoreMainInventory(staff, offlinePlayer, logType, timestamp);
             }
 
             // Clicked icon to teleport player to backup coordinates
@@ -462,16 +364,26 @@ public class ClickGUI implements Listener {
                         Math.floor(Double.parseDouble(location[3])))
                         .add(0.5, 0.5, 0.5);				
 
-                // Teleport player on a slight delay to block the teleport icon glitching out into the player inventory
-                SchedulerUtils.runTaskLater(e.getWhoClicked().getLocation(), () -> {
-                    e.getWhoClicked().closeInventory();
-                    PaperLib.teleportAsync(staff,loc).thenAccept((result) -> {
-                        if (SoundData.isTeleportEnabled())
-                            staff.playSound(loc, SoundData.getTeleport(), 1, 1);
+                // First enter the target region so target-location access is owned by RegionScheduler,
+                // then return to the staff entity scheduler for player-owned inventory/teleport work.
+                SchedulerUtils.callSyncMethod(loc, () -> loc.clone()).whenComplete((targetLocation, ex) -> {
+                    if (ex != null) {
+                        ex.printStackTrace();
+                        PlayerScheduler.sendMessage(staff, MessageData.getPluginPrefix() + MessageData.getError());
+                        return;
+                    }
 
-                        staff.sendMessage(MessageData.getPluginPrefix() + MessageData.getDeathLocationTeleport(loc));
-                    });
-                }, 1L);
+                    // Teleport player on a slight delay to block the teleport icon glitching out into the player inventory
+                    PlayerScheduler.runLater(staff, () -> {
+                        staff.closeInventory();
+                        staff.teleportAsync(targetLocation).thenAccept((result) -> PlayerScheduler.run(staff, () -> {
+                            if (SoundData.isTeleportEnabled())
+                                staff.playSound(targetLocation, SoundData.getTeleport(), 1, 1);
+
+                            staff.sendMessage(MessageData.getPluginPrefix() + MessageData.getDeathLocationTeleport(targetLocation));
+                        }));
+                    }, 1L);
+                });
             } 
 
             // Clicked icon to restore backup players ender chest
@@ -483,25 +395,15 @@ public class ClickGUI implements Listener {
                         // Init from MySQL or, if YAML, init & load config file
                         PlayerData data = new PlayerData(offlinePlayer, logType, timestamp);
 
-                        // Get data if using MySQL
-                        if (ConfigData.getSaveType() == ConfigData.SaveType.MYSQL) {
-                            try {
-                                data.getAllBackupData().get();
-                            } catch (ExecutionException | InterruptedException ex) {
-                                ex.printStackTrace();
-                            }
-                        }
+                        loadAllBackupData(data);
 
-                        // Create Inventory
-                        EnderChestBackupMenu menu = new EnderChestBackupMenu(staff, data, 1);
-
-                        // Open inventory sync (compressed code)
-                        SchedulerUtils.callSyncMethod(e.getWhoClicked().getLocation(), () -> {
+                        PlayerScheduler.call(staff, () -> {
+                            EnderChestBackupMenu menu = new EnderChestBackupMenu(staff, data, 1);
                             staff.openInventory(menu.getInventory());
-                            return null;
-                        }).whenComplete((res, ex) -> {
+                            return menu;
+                        }).whenComplete((menu, ex) -> {
                             if (ex != null) ex.printStackTrace();
-                            else {
+                            else if (menu != null) {
                                 menu.showEnderChestItems();
                             }
                         });
@@ -517,22 +419,8 @@ public class ClickGUI implements Listener {
                     return;
                 }
 
-                if (offlinePlayer.isOnline()) {
-                    Player player = (Player) offlinePlayer;	
-                    double health = nbt.getDouble("health");
-
-                    player.setHealth(health);
-
-                    if (SoundData.isFoodRestoredEnabled())
-                        player.playSound(player.getLocation(), SoundData.getFoodRestored(), 1, 1);
-
-                    player.sendMessage(MessageData.getPluginPrefix() + MessageData.getHealthRestoredPlayer(staff.getName()));
-                    if (!staff.getUniqueId().equals(player.getUniqueId()))
-                        staff.sendMessage(MessageData.getPluginPrefix() + MessageData.getHealthRestored(player.getName()));
-                } else {
-                    staff.sendMessage(MessageData.getPluginPrefix() + MessageData.getHealthNotOnline(offlinePlayer.getName()));
-                }
-            } 
+                restoreService.restoreHealth(staff, offlinePlayer, nbt.getDouble("health"));
+            }
 
             //Clicked icon to restore backup players hunger
             else if (icon.getType().equals(Buttons.getHungerIcon())) {
@@ -542,24 +430,8 @@ public class ClickGUI implements Listener {
                     return;
                 }
 
-                if (offlinePlayer.isOnline()) {
-                    Player player = (Player) offlinePlayer;	
-                    int hunger = nbt.getInt("hunger");
-                    Float saturation = nbt.getFloat("saturation");
-
-                    player.setFoodLevel(hunger);
-                    player.setSaturation(saturation);
-
-                    if (SoundData.isHungerRestoredEnabled())
-                        player.playSound(player.getLocation(), SoundData.getHungerRestored(), 1, 1);
-
-                    player.sendMessage(MessageData.getPluginPrefix() + MessageData.getHungerRestoredPlayer(staff.getName()));
-                    if (!staff.getUniqueId().equals(player.getUniqueId()))
-                        staff.sendMessage(MessageData.getPluginPrefix() + MessageData.getHungerRestored(player.getName()));
-                } else {
-                    staff.sendMessage(MessageData.getPluginPrefix() + MessageData.getHungerNotOnline(offlinePlayer.getName()));
-                }
-            } 
+                restoreService.restoreHunger(staff, offlinePlayer, nbt.getInt("hunger"), nbt.getFloat("saturation"));
+            }
 
             //Clicked icon to restore backup players experience
             else if (icon.getType().equals(Buttons.getExperienceIcon())) {
@@ -569,22 +441,7 @@ public class ClickGUI implements Listener {
                     return;
                 }
 
-                if (offlinePlayer.isOnline()) {				
-                    Player player = (Player) offlinePlayer;	
-                    Float xp = nbt.getFloat("xp");
-
-                    RestoreInventory.setTotalExperience(player, xp);
-
-                    if (SoundData.isExperienceRestoredEnabled())
-                        player.playSound(player.getLocation(), SoundData.getExperienceSound(), 1, 1);
-
-                    int level = (int) RestoreInventory.getLevel(xp);
-                    player.sendMessage(MessageData.getPluginPrefix() + MessageData.getExperienceRestoredPlayer(staff.getName(), level));
-                    if (!staff.getUniqueId().equals(player.getUniqueId()))
-                        staff.sendMessage(MessageData.getPluginPrefix() + MessageData.getExperienceRestored(player.getName(), level));
-                } else {				    
-                    staff.sendMessage(MessageData.getPluginPrefix() + MessageData.getExperienceNotOnlinePlayer(offlinePlayer.getName()));
-                }
+                restoreService.restoreExperience(staff, offlinePlayer, nbt.getFloat("xp"));
             }
         } else {
             int slotIndex = e.getRawSlot();
@@ -640,34 +497,25 @@ public class ClickGUI implements Listener {
                             // Init from MySQL or, if YAML, init & load config file
                             PlayerData data = new PlayerData(offlinePlayer, logType, timestamp);
 
-                            // Get data if using MySQL
-                            if (ConfigData.getSaveType() == ConfigData.SaveType.MYSQL) {
-                                try {
-                                    data.getAllBackupData().get();
-                                } catch (ExecutionException | InterruptedException ex) {
-                                    ex.printStackTrace();
-                                }
-                            }
+                            loadAllBackupData(data);
 
                             // Get location of where the backup was made from data
                             String location = data.getWorld() + "," + data.getX() + "," + data.getY() + "," + data.getZ();
 
-                            // Create inventory
-                            MainInventoryBackupMenu menu = new MainInventoryBackupMenu(staff, data, location);
-
-                            // Display inventory to player
-                            SchedulerUtils.callSyncMethod(e.getWhoClicked().getLocation(), () -> staff.openInventory(menu.getInventory()))
-                                    .whenComplete((view, ex) -> {
-                                        if (ex != null) {
-                                            ex.printStackTrace();
-                                            return;
-                                        }
-                                        if (view == null) {
-                                            // backup inválido, tratar aqui se quiser
-                                            return;
-                                        }
-                                        menu.showBackupItems();
-                                    });
+                            PlayerScheduler.call(staff, () -> {
+                                MainInventoryBackupMenu menu = new MainInventoryBackupMenu(staff, data, location);
+                                staff.openInventory(menu.getInventory());
+                                return menu;
+                            }).whenComplete((menu, ex) -> {
+                                if (ex != null) {
+                                    ex.printStackTrace();
+                                    return;
+                                }
+                                if (menu == null) {
+                                    return;
+                                }
+                                menu.showBackupItems();
+                            });
                         }
                     });
 
@@ -679,25 +527,15 @@ public class ClickGUI implements Listener {
                             // Init from MySQL or, if YAML, init & load config file
                             PlayerData data = new PlayerData(offlinePlayer, logType, timestamp);
 
-                            // Get data if using MySQL
-                            if (ConfigData.getSaveType() == ConfigData.SaveType.MYSQL) {
-                                try {
-                                    data.getAllBackupData().get();
-                                } catch (ExecutionException | InterruptedException ex) {
-                                    ex.printStackTrace();
-                                }
-                            }
+                            loadAllBackupData(data);
 
-                            // Create Inventory
-                            EnderChestBackupMenu menu = new EnderChestBackupMenu(staff, data, page);
-
-                            // Open inventory sync (compressed code)
-                            SchedulerUtils.callSyncMethod(e.getWhoClicked().getLocation(), () -> {
+                            PlayerScheduler.call(staff, () -> {
+                                EnderChestBackupMenu menu = new EnderChestBackupMenu(staff, data, page);
                                 staff.openInventory(menu.getInventory());
-                                return null;
-                            }).whenComplete((res, ex) -> {
+                                return menu;
+                            }).whenComplete((menu, ex) -> {
                                 if (ex != null) ex.printStackTrace();
-                                else {
+                                else if (menu != null) {
                                     menu.showEnderChestItems();
                                 }
                             });
@@ -725,52 +563,30 @@ public class ClickGUI implements Listener {
                     // Init from MySQL or, if YAML, init & load config file
                     PlayerData data = new PlayerData(offlinePlayer, logType, timestamp);
 
-                    // Get data if using MySQL
-                    if (ConfigData.getSaveType() == ConfigData.SaveType.MYSQL) {
-                        try {
-                            data.getAllBackupData().get();
-                        } catch (ExecutionException | InterruptedException ex) {
-                            ex.printStackTrace();
-                        }
-                    }
+                    loadAllBackupData(data);
 
                     ItemStack[] enderChest = data.getEnderChest();
 
-                    List<ItemStack> shulkers = new ArrayList<>();
-                    if (enderChest != null && enderChest.length != 0) {
-                        int totalItems = enderChest.length;
-                        int shulkerCount = (int) Math.ceil(totalItems / 27.0);
+                    PlayerScheduler.run(staff, () -> {
+                        List<ItemStack> shulkers = new ArrayList<>();
+                        if (enderChest != null && enderChest.length != 0) {
+                            int totalItems = enderChest.length;
+                            int shulkerCount = (int) Math.ceil(totalItems / 27.0);
 
-                        for (int i = 0; i < shulkerCount; i++) {
-                            int start = i * 27;
-                            int end = Math.min(start + 27, totalItems);
+                            for (int i = 0; i < shulkerCount; i++) {
+                                int start = i * 27;
+                                int end = Math.min(start + 27, totalItems);
 
-                            ItemStack[] shulkerContents = new ItemStack[27];
-                            System.arraycopy(enderChest, start, shulkerContents, 0, end - start);
+                                ItemStack[] shulkerContents = new ItemStack[27];
+                                System.arraycopy(enderChest, start, shulkerContents, 0, end - start);
 
-                            ItemStack shulker = new ItemStack(Material.SHULKER_BOX);
-                            ItemMeta meta = shulker.getItemMeta();
-
-                            if (meta instanceof BlockStateMeta) {
-                                BlockStateMeta blockMeta = (BlockStateMeta) meta;
-                                if (blockMeta.getBlockState() instanceof ShulkerBox) {
-                                    ShulkerBox shulkerBox = (ShulkerBox) blockMeta.getBlockState();
-                                    shulkerBox.getInventory().setContents(shulkerContents);
-                                    blockMeta.setBlockState(shulkerBox);
-                                    String name = (shulkerCount == 1)
-                                            ? MessageData.getShulkerBoxEnderChestShulkerName()
-                                            : (MessageData.getShulkerBoxEnderChestShulkerName() + MessageData.getShulkerBoxEnderChestShulkerExtraShulkers(i+1));
-                                    blockMeta.setDisplayName(name);
-                                    blockMeta.setLore(MessageData.getShulkerBoxEnderChestShulkerLore());
-                                    shulker.setItemMeta(blockMeta);
-                                }
+                                String name = (shulkerCount == 1)
+                                        ? MessageData.getShulkerBoxEnderChestShulkerName()
+                                        : (MessageData.getShulkerBoxEnderChestShulkerName() + MessageData.getShulkerBoxEnderChestShulkerExtraShulkers(i + 1));
+                                shulkers.add(createShulker(shulkerContents, name, MessageData.getShulkerBoxEnderChestShulkerLore()));
                             }
-
-                            shulkers.add(shulker);
                         }
-                    };
 
-                    SchedulerUtils.runTask(null, () -> {
                         staff.getInventory().addItem(shulkers.toArray(new ItemStack[0]));
                         staff.closeInventory();
                     });
@@ -785,44 +601,7 @@ public class ClickGUI implements Listener {
                     return;
                 }
 
-                if (offlinePlayer.isOnline()) {
-                    Player player = (Player) offlinePlayer;
-
-                    // Run all data retrieval operations async to avoid tick lag
-                    SchedulerUtils.runTaskAsynchronously(new FoliaRunnable() {
-                        @Override
-                        public void run() {
-                            // Init from MySQL or, if YAML, init & load config file
-                            PlayerData data = new PlayerData(offlinePlayer, logType, timestamp);
-
-                            // Get from MySQL
-                            if (ConfigData.getSaveType() == ConfigData.SaveType.MYSQL) {
-                                try {
-                                    data.getAllBackupData().get();
-                                } catch (ExecutionException | InterruptedException ex) {
-                                    ex.printStackTrace();
-                                }
-                            }
-
-                            // Display inventory to player
-                            SchedulerUtils.callSyncMethod(e.getWhoClicked().getLocation(), () -> {
-                                player.getEnderChest().setContents(data.getEnderChest() != null ? data.getEnderChest() : new ItemStack[0]);
-                                return null;
-                            }).whenComplete((res, ex) -> {
-                                if (ex != null) ex.printStackTrace();
-                            });
-                        }
-                    });
-
-                    if (SoundData.isInventoryRestoreEnabled())
-                        player.playSound(player.getLocation(), SoundData.getInventoryRestored(), 1, 1); 
-
-                    player.sendMessage(MessageData.getPluginPrefix() + MessageData.getEnderChestRestoredPlayer(staff.getName()));
-                    if (!staff.getUniqueId().equals(player.getUniqueId()))
-                        staff.sendMessage(MessageData.getPluginPrefix() + MessageData.getEnderChestRestored(offlinePlayer.getName()));
-                } else {
-                    staff.sendMessage(MessageData.getPluginPrefix() + MessageData.getEnderChestNotOnline(offlinePlayer.getName()));
-                }
+                restoreService.restoreEnderChest(staff, offlinePlayer, logType, timestamp);
             }
         } else {
             int slotIndex = e.getRawSlot();
@@ -840,6 +619,33 @@ public class ClickGUI implements Listener {
                 e.setCancelled(false);
             }
         }
+    }
+
+
+    private ItemStack createShulker(ItemStack[] contents, String displayName, List<String> lore) {
+        ItemStack shulker = new ItemStack(Material.SHULKER_BOX);
+        ItemMeta meta = shulker.getItemMeta();
+
+        if (meta instanceof BlockStateMeta) {
+            BlockStateMeta blockMeta = (BlockStateMeta) meta;
+            if (blockMeta.getBlockState() instanceof ShulkerBox) {
+                ShulkerBox shulkerBox = (ShulkerBox) blockMeta.getBlockState();
+                shulkerBox.getInventory().setContents(contents);
+                blockMeta.setBlockState(shulkerBox);
+                blockMeta.setDisplayName(displayName);
+                blockMeta.setLore(lore);
+                shulker.setItemMeta(blockMeta);
+            }
+        }
+
+        return shulker;
+    }
+
+    private void loadAllBackupData(PlayerData data) {
+        if (ConfigData.getSaveType() != ConfigData.SaveType.MYSQL) {
+            return;
+        }
+        data.loadAllBackupData();
     }
 
 }

@@ -2,6 +2,7 @@ package me.danjono.inventoryrollback.gui.menu;
 
 import com.nuclyon.technicallycoded.inventoryrollback.InventoryRollbackPlus;
 import com.nuclyon.technicallycoded.inventoryrollback.folia.FoliaRunnable;
+import com.nuclyon.technicallycoded.inventoryrollback.folia.PlayerScheduler;
 import com.nuclyon.technicallycoded.inventoryrollback.folia.SchedulerUtils;
 import com.tcoded.lightlibs.bukkitversion.MCVersion;
 import me.danjono.inventoryrollback.config.ConfigData;
@@ -110,7 +111,7 @@ public class MainInventoryBackupMenu {
 		//If the backup file is invalid it will return null, we want to catch it here
 		try {
     		// Add items, 5 per tick
-			SchedulerUtils.runTaskTimer(null, new FoliaRunnable() {
+			SchedulerUtils.runEntityTimer(staff, new FoliaRunnable() {
 
 				boolean processedHotbar;
 				int menuPos = 27;
@@ -143,10 +144,10 @@ public class MainInventoryBackupMenu {
 						backupPos++;
 					}
 				}
-			}, 1, 1);
+			}, () -> { }, 1, 1);
 		} catch (Exception ex) {
 			ex.printStackTrace();
-			staff.sendMessage(MessageData.getPluginPrefix() + MessageData.getErrorInventory());
+			PlayerScheduler.sendMessage(staff, MessageData.getPluginPrefix() + MessageData.getErrorInventory());
 		    return;
 		}
 
@@ -159,7 +160,7 @@ public class MainInventoryBackupMenu {
                 // Place item safely
                 final int finalPos = position.getAndDecrement();
                 final int finalItem = i;
-                SchedulerUtils.callSyncMethod(null, () -> {
+                PlayerScheduler.call(staff, () -> {
                     inventory.setItem(finalPos, armor[finalItem]);
                     return null;
                 }).whenComplete((res, ex) -> {
@@ -172,7 +173,7 @@ public class MainInventoryBackupMenu {
                     // Place item safely
                     final int finalPos = position.getAndDecrement();
                     final int finalItem = item;
-                    SchedulerUtils.callSyncMethod(null, () -> {
+                    PlayerScheduler.call(staff, () -> {
                         inventory.setItem(finalPos, mainInventory[finalItem]);
                         return null;
                     }).whenComplete((res, ex) -> {

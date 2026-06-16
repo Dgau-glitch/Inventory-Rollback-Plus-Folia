@@ -9,7 +9,6 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 import com.nuclyon.technicallycoded.inventoryrollback.InventoryRollbackPlus;
-import com.nuclyon.technicallycoded.inventoryrollback.folia.FoliaRunnable;
 import com.nuclyon.technicallycoded.inventoryrollback.folia.SchedulerUtils;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
@@ -22,6 +21,7 @@ import me.danjono.inventoryrollback.config.ConfigData.SaveType;
 public class PlayerData {
 
     private final OfflinePlayer offlinePlayer;
+    private final UUID uuid;
     private final LogType logType;
     private final Long timestamp;
 
@@ -30,18 +30,20 @@ public class PlayerData {
     
     public PlayerData(OfflinePlayer offlinePlayer, LogType logType, Long timestamp) {
         this.offlinePlayer = offlinePlayer;
+        this.uuid = offlinePlayer.getUniqueId();
         this.logType = logType;
         this.timestamp = timestamp;
 
         if (ConfigData.getSaveType() == SaveType.YAML) {
-            yaml = new YAML(offlinePlayer.getUniqueId(), logType, timestamp);
+            yaml = new YAML(uuid, logType, timestamp);
         } else if (ConfigData.getSaveType() == SaveType.MYSQL) {
-            mysql = new MySQL(offlinePlayer.getUniqueId(), logType, timestamp);
+            mysql = new MySQL(uuid, logType, timestamp);
         }
     }
 
     public PlayerData(UUID uuid, LogType logType, Long timestamp) {
-        this.offlinePlayer = Bukkit.getOfflinePlayer(uuid);
+        this.offlinePlayer = null;
+        this.uuid = uuid;
         this.logType = logType;
         this.timestamp = timestamp;
 
@@ -53,7 +55,7 @@ public class PlayerData {
     }
         
     public OfflinePlayer getOfflinePlayer() {
-        return this.offlinePlayer;
+        return offlinePlayer != null ? offlinePlayer : Bukkit.getOfflinePlayer(uuid);
         
     }
     
@@ -261,21 +263,22 @@ public class PlayerData {
         }
     }
 
+    public void loadAllBackupData() {
+        if (ConfigData.getSaveType() == SaveType.MYSQL) {
+            try {
+                mysql.getAllBackupData();
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
     public CompletableFuture<Void> getAllBackupData() {
         CompletableFuture<Void> future = new CompletableFuture<>();
-        if (ConfigData.getSaveType() == SaveType.MYSQL) {
-            SchedulerUtils.runTaskAsynchronously(new FoliaRunnable() {
-                @Override
-                public void run() {
-                    try {
-                        mysql.getAllBackupData();
-                    } catch (SQLException e) {
-                        e.printStackTrace();
-                    }
-                    future.complete(null);
-                }
-            });
-        }
+        SchedulerUtils.runTaskAsynchronously(() -> {
+            loadAllBackupData();
+            future.complete(null);
+        });
         return future;
     }
 

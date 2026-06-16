@@ -5,6 +5,8 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 
+import com.nuclyon.technicallycoded.inventoryrollback.folia.PlayerScheduler;
+import com.nuclyon.technicallycoded.inventoryrollback.folia.SchedulerUtils;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.OfflinePlayer;
@@ -47,57 +49,79 @@ public class PlayerMenu {
         return this.inventory;
     }
 
+    public void populatePlayerMenuAsync() {
+        SchedulerUtils.runTaskAsynchronously(() -> {
+            PlayerMenuData data = loadPlayerMenuData();
+            PlayerScheduler.run(staff, () -> applyPlayerMenuData(data));
+        });
+    }
+
     public void getPlayerMenu() {
+        applyPlayerMenuData(loadPlayerMenuData());
+    }
+
+    private PlayerMenuData loadPlayerMenuData() {
         List<String> lore = new ArrayList<>();
-        
+
         if (offlinePlayer.isOnline()) {
             lore.add(ChatColor.GREEN + "Online now");
         } else if (!offlinePlayer.hasPlayedBefore()) {
             lore.add(ChatColor.RED + "Never played on this server");
         } else {
             lore.add(ChatColor.RED + "Offline");
-            
+
             String dateTime = "Unknown";
             if (offlinePlayer.getLastPlayed() != 0)
                 dateTime = PlayerData.getTime(offlinePlayer.getLastPlayed());
             lore.add(ChatColor.RED + "Last online: " + dateTime);
         }
-        
-        inventory.setItem(0, buttons.playerHead(lore, true));
+
         UUID uuid = offlinePlayer.getUniqueId();
+        int deaths = new PlayerData(uuid, LogType.DEATH, null).getAmountOfBackups();
+        int joins = new PlayerData(uuid, LogType.JOIN, null).getAmountOfBackups();
+        int quits = new PlayerData(uuid, LogType.QUIT, null).getAmountOfBackups();
+        int worldChanges = new PlayerData(uuid, LogType.WORLD_CHANGE, null).getAmountOfBackups();
+        int forceSaves = new PlayerData(uuid, LogType.FORCE, null).getAmountOfBackups();
 
-        PlayerData deathBackup = new PlayerData(uuid, LogType.DEATH, null);
-        PlayerData joinBackup = new PlayerData(uuid, LogType.JOIN, null);
-        PlayerData quitBackup = new PlayerData(uuid, LogType.QUIT, null);
-        PlayerData worldChangeBackup = new PlayerData(uuid, LogType.WORLD_CHANGE, null);
-        PlayerData forceSaveBackup = new PlayerData(uuid, LogType.FORCE, null);
+        return new PlayerMenuData(lore, deaths, joins, quits, worldChanges, forceSaves);
+    }
 
-        if (!joinBackup.doesBackupTypeExist()
-                && !quitBackup.doesBackupTypeExist()
-                && !deathBackup.doesBackupTypeExist()
-                && !worldChangeBackup.doesBackupTypeExist()
-                && !forceSaveBackup.doesBackupTypeExist()) {
+    private void applyPlayerMenuData(PlayerMenuData data) {
+        inventory.setItem(0, buttons.playerHead(data.lore, true));
 
-            //No backups have been found for the player
+        if (!data.hasBackups()) {
             staff.sendMessage(MessageData.getPluginPrefix() + MessageData.getNoBackupError(offlinePlayer.getName()));
         }
-        
+
         String backupsAvailable = " backup(s) available";
 
-        List<String> deaths = Arrays.asList(deathBackup.getAmountOfBackups() + backupsAvailable);
-        inventory.setItem(2, buttons.createDeathLogButton(LogType.DEATH, deaths));
-        
-        List<String> joins = Arrays.asList(joinBackup.getAmountOfBackups() + backupsAvailable);
-        inventory.setItem(3, buttons.createJoinLogButton(LogType.JOIN, joins));
-        
-        List<String> quits = Arrays.asList(quitBackup.getAmountOfBackups() + backupsAvailable);
-        inventory.setItem(4, buttons.createQuitLogButton(LogType.QUIT, quits));
-        
-        List<String> worldChange = Arrays.asList(worldChangeBackup.getAmountOfBackups() + backupsAvailable);
-        inventory.setItem(5, buttons.createWorldChangeLogButton(LogType.WORLD_CHANGE, worldChange));
-        
-        List<String> forceSaves = Arrays.asList(forceSaveBackup.getAmountOfBackups() + backupsAvailable);
-        inventory.setItem(6, buttons.createForceSaveLogButton(LogType.FORCE, forceSaves));
+        inventory.setItem(2, buttons.createDeathLogButton(LogType.DEATH, Arrays.asList(data.deaths + backupsAvailable)));
+        inventory.setItem(3, buttons.createJoinLogButton(LogType.JOIN, Arrays.asList(data.joins + backupsAvailable)));
+        inventory.setItem(4, buttons.createQuitLogButton(LogType.QUIT, Arrays.asList(data.quits + backupsAvailable)));
+        inventory.setItem(5, buttons.createWorldChangeLogButton(LogType.WORLD_CHANGE, Arrays.asList(data.worldChanges + backupsAvailable)));
+        inventory.setItem(6, buttons.createForceSaveLogButton(LogType.FORCE, Arrays.asList(data.forceSaves + backupsAvailable)));
+    }
+
+    private static class PlayerMenuData {
+        private final List<String> lore;
+        private final int deaths;
+        private final int joins;
+        private final int quits;
+        private final int worldChanges;
+        private final int forceSaves;
+
+        private PlayerMenuData(List<String> lore, int deaths, int joins, int quits, int worldChanges, int forceSaves) {
+            this.lore = lore;
+            this.deaths = deaths;
+            this.joins = joins;
+            this.quits = quits;
+            this.worldChanges = worldChanges;
+            this.forceSaves = forceSaves;
+        }
+
+        private boolean hasBackups() {
+            return deaths > 0 || joins > 0 || quits > 0 || worldChanges > 0 || forceSaves > 0;
+        }
     }
 
 }

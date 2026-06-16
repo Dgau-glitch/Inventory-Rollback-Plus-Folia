@@ -53,6 +53,8 @@ public class SaveInventory {
     public void save(PlayerDataSnapshot snapshot, boolean async) {
         if (snapshot == null) return;
         UUID uuid = player.getUniqueId();
+        String playerName = player.getName();
+        String packageVersion = InventoryRollback.getPackageVersion();
 
         // Rate limiter
         UserLogRateLimiter userLogRateLimiter = rateLimiters.get(uuid);
@@ -62,41 +64,42 @@ public class SaveInventory {
         }
         userLogRateLimiter.log(logType, timestamp);
         if (userLogRateLimiter.isRateLimitExceeded(logType)) {
-            main.getLogger().warning("Player " + player.getName() + " is being rate limited! This means that something is causing this log to be created FASTER than even once per tick! Log type: " + logType.name());
+            main.getLogger().warning("Player " + playerName + " is being rate limited! This means that something is causing this log to be created FASTER than even once per tick! Log type: " + logType.name());
             new IllegalStateException("Rate limiting reached! This should never happen under normal operation!").printStackTrace();
             return;
         }
 
         boolean saveAsync = !InventoryRollbackPlus.getInstance().isShuttingDown() && async;
         Runnable saveTask = () -> {
-            PlayerData data = new PlayerData(player, logType, timestamp);
+            PlayerData data = new PlayerData(uuid, logType, timestamp);
 
-            if (snapshot.finalMainInvContents != null) data.setMainInventory(snapshot.finalMainInvContents);
-            if (snapshot.finalMainInvArmor != null) data.setArmour(snapshot.finalMainInvArmor);
-            if (snapshot.finalEnderInvContents != null) data.setEnderChest(snapshot.finalEnderInvContents);
+            if (snapshot.getMainInventoryContents() != null) data.setMainInventory(snapshot.getMainInventoryContents());
+            if (snapshot.getArmourContents() != null) data.setArmour(snapshot.getArmourContents());
+            if (snapshot.getEnderChestContents() != null) data.setEnderChest(snapshot.getEnderChestContents());
 
-            data.setXP(snapshot.totalXp);
-            data.setHealth(snapshot.health);
-            data.setFoodLevel(snapshot.foodLevel);
-            data.setSaturation(snapshot.saturation);
-            data.setWorld(snapshot.worldName);
+            data.setXP(snapshot.getTotalXp());
+            data.setHealth(snapshot.getHealth());
+            data.setFoodLevel(snapshot.getFoodLevel());
+            data.setSaturation(snapshot.getSaturation());
+            data.setWorld(snapshot.getWorldName());
 
-            data.setX(snapshot.locX);
-            data.setY(snapshot.locY);
-            data.setZ(snapshot.locZ);
+            data.setX(snapshot.getLocX());
+            data.setY(snapshot.getLocY());
+            data.setZ(snapshot.getLocZ());
 
             data.setLogType(logType);
-            data.setVersion(InventoryRollback.getPackageVersion());
+            data.setVersion(packageVersion);
 
             if (causeAlias != null) data.setDeathReason(causeAlias);
             else if (deathCause != null) data.setDeathReason(deathCause.name());
             else if (logType == LogType.DEATH) data.setDeathReason("UNKNOWN");
 
-            // Remove excess saves if limit is reached
-            CompletableFuture<Void> purgeTask = data.purgeExcessSaves(saveAsync);
+            // Remove excess saves if limit is reached. The surrounding saveTask already owns async execution
+            // when saveAsync is true, so the storage methods run inline here and never touch live Bukkit objects.
+            CompletableFuture<Void> purgeTask = data.purgeExcessSaves(false);
 
             // Save new data
-            purgeTask.thenRun(() -> data.saveData(saveAsync));
+            purgeTask.thenRun(() -> data.saveData(false));
         };
 
         if (saveAsync) SchedulerUtils.runTaskAsynchronously(saveTask);
@@ -178,19 +181,19 @@ public class SaveInventory {
     }
 
     public static class PlayerDataSnapshot {
-        public final float totalXp;
-        public final double health;
-        public final int foodLevel;
-        public final float saturation;
-        public final String worldName;
-        public final double locX;
-        public final double locY;
-        public final double locZ;
-        public final ItemStack[] finalMainInvContents;
-        public final ItemStack[] finalMainInvArmor;
-        public final ItemStack[] finalEnderInvContents;
+        private final float totalXp;
+        private final double health;
+        private final int foodLevel;
+        private final float saturation;
+        private final String worldName;
+        private final double locX;
+        private final double locY;
+        private final double locZ;
+        private final ItemStack[] mainInventoryContents;
+        private final ItemStack[] armourContents;
+        private final ItemStack[] enderChestContents;
 
-        public PlayerDataSnapshot(float totalXp, double health, int foodLevel, float saturation, String worldName, double locX, double locY, double locZ, ItemStack[] finalMainInvContents, ItemStack[] finalMainInvArmor, ItemStack[] finalEnderInvContents) {
+        public PlayerDataSnapshot(float totalXp, double health, int foodLevel, float saturation, String worldName, double locX, double locY, double locZ, ItemStack[] mainInventoryContents, ItemStack[] armourContents, ItemStack[] enderChestContents) {
             this.totalXp = totalXp;
             this.health = health;
             this.foodLevel = foodLevel;
@@ -199,9 +202,42 @@ public class SaveInventory {
             this.locX = locX;
             this.locY = locY;
             this.locZ = locZ;
-            this.finalMainInvContents = finalMainInvContents;
-            this.finalMainInvArmor = finalMainInvArmor;
-            this.finalEnderInvContents = finalEnderInvContents;
+            this.mainInventoryContents = copyItemArrayStatic(mainInventoryContents);
+            this.armourContents = copyItemArrayStatic(armourContents);
+            this.enderChestContents = copyItemArrayStatic(enderChestContents);
+        }
+
+        public float getTotalXp() { return totalXp; }
+
+        public double getHealth() { return health; }
+
+        public int getFoodLevel() { return foodLevel; }
+
+        public float getSaturation() { return saturation; }
+
+        public String getWorldName() { return worldName; }
+
+        public double getLocX() { return locX; }
+
+        public double getLocY() { return locY; }
+
+        public double getLocZ() { return locZ; }
+
+        public ItemStack[] getMainInventoryContents() { return copyItemArrayStatic(mainInventoryContents); }
+
+        public ItemStack[] getArmourContents() { return copyItemArrayStatic(armourContents); }
+
+        public ItemStack[] getEnderChestContents() { return copyItemArrayStatic(enderChestContents); }
+
+        private static ItemStack[] copyItemArrayStatic(ItemStack[] contents) {
+            if (contents == null) return null;
+            ItemStack[] copy = new ItemStack[contents.length];
+            for (int i = 0; i < contents.length; i++) {
+                if (contents[i] != null) {
+                    copy[i] = contents[i].clone();
+                }
+            }
+            return copy;
         }
 
         @Override
@@ -219,11 +255,9 @@ public class SaveInventory {
             if (Double.compare(that.locZ, locZ) != 0) return false;
             if (Float.compare(that.totalXp, totalXp) != 0) return false;
             if (!worldName.equals(that.worldName)) return false;
-            if (!Arrays.equals(finalMainInvContents, that.finalMainInvContents)) return false;
-            if (!Arrays.equals(finalMainInvArmor, that.finalMainInvArmor)) return false;
-            if (!Arrays.equals(finalEnderInvContents, that.finalEnderInvContents)) return false;
-
-            return true;
+            if (!Arrays.equals(mainInventoryContents, that.mainInventoryContents)) return false;
+            if (!Arrays.equals(armourContents, that.armourContents)) return false;
+            return Arrays.equals(enderChestContents, that.enderChestContents);
         }
 
         @Override
@@ -237,9 +271,9 @@ public class SaveInventory {
                     ", locX=" + locX +
                     ", locY=" + locY +
                     ", locZ=" + locZ +
-                    ", finalMainInvContents=" + Arrays.toString(finalMainInvContents) +
-                    ", finalMainInvArmor=" + Arrays.toString(finalMainInvArmor) +
-                    ", finalEnderInvContents=" + Arrays.toString(finalEnderInvContents) +
+                    ", mainInventoryContents=" + Arrays.toString(mainInventoryContents) +
+                    ", armourContents=" + Arrays.toString(armourContents) +
+                    ", enderChestContents=" + Arrays.toString(enderChestContents) +
                     '}';
         }
     }
