@@ -18,6 +18,8 @@ commands:
     description: ${project.description}
     usage: /irp <subcommand>
     aliases: [ir, irp, inventoryrollback]
+    permission: inventoryrollbackplus.cmd
+    permission-message: ''
 
 permissions:
   inventoryrollbackplus.*:
@@ -39,8 +41,8 @@ permissions:
       inventoryrollbackplus.viewbackups: true
     default: op
   inventoryrollbackplus.cmd:
-    description: Allows InventoryRollback commands to work.
-    default: true
+    description: Allows the base InventoryRollbackPlus command to be visible and executable.
+    default: false
   inventoryrollbackplus.deathsave:
     description: Player inventories will be saved when they die.
     default: true
@@ -56,16 +58,23 @@ permissions:
   inventoryrollbackplus.enable:
     description: Grants access to enable the plugin globally.
     default: op
+    children:
+      inventoryrollbackplus.cmd: true
   inventoryrollbackplus.disable:
     description: Grants access to disable the plugin globally.
     default: op
+    children:
+      inventoryrollbackplus.cmd: true
   inventoryrollbackplus.reload:
     description: Grants access to reload the plugin configuration.
     default: op
+    children:
+      inventoryrollbackplus.cmd: true
   inventoryrollbackplus.restore:
     description: Grants access to perform player roll backs.
     default: op
     children:
+      inventoryrollbackplus.cmd: true
       inventoryrollbackplus.viewbackups: true
       inventoryrollbackplus.restore.teleport:
         default: op
@@ -73,18 +82,26 @@ permissions:
   inventoryrollbackplus.forcebackup:
     description: Forces a backup for an online player.
     default: op
+    children:
+      inventoryrollbackplus.cmd: true
   inventoryrollbackplus.viewbackups:
     description: Allows player to view player backups but can't take items from the backups or restore the target's inventory
     default: op
+    children:
+      inventoryrollbackplus.cmd: true
   inventoryrollbackplus.adminalerts:
     description: Allows player to receive extra notifications related to the plugin when joining.
     default: op
   inventoryrollbackplus.version:
     description: Allows player to see the version the plugin is running on the server.
-    default: true
+    default: op
+    children:
+      inventoryrollbackplus.cmd: true
   inventoryrollbackplus.help:
     description: Get the list of commands and what they do
-    default: true
+    default: op
+    children:
+      inventoryrollbackplus.cmd: true
 
   # ---- LEGACY COMPATIBILITY ----
   inventoryrollback.cmd:

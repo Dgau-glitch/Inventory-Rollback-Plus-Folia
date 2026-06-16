@@ -41,50 +41,57 @@ public class RestoreSubCmd extends IRPCommand {
         }
     }
 
-    @SuppressWarnings("deprecation")
     private void openBackupMenu(CommandSender sender, Player staff, String[] args) {
         if (args.length <= 0 || args.length == 1) {
             try {
                 openMainMenu(staff);
             } catch (NullPointerException ignored) {}
-        } else if(args.length == 2) {
-            OfflinePlayer rollbackPlayer;
+            return;
+        }
 
-            String uuidStr = args[1];
-
-            // Handle input of UUID
-            if (uuidStr.length() == 36 || args[1].length() == 32) {
-
-                // Handle malformed UUID
-                if (args[1].length() == 32) {
-                    String oldUuidStr = uuidStr;
-                    uuidStr = oldUuidStr.substring(0, 8);
-                    uuidStr += "-";
-                    uuidStr += oldUuidStr.substring(8, 12);
-                    uuidStr += "-";
-                    uuidStr += oldUuidStr.substring(12, 16);
-                    uuidStr += "-";
-                    uuidStr += oldUuidStr.substring(16, 20);
-                    uuidStr += "-";
-                    uuidStr += oldUuidStr.substring(20);
-                }
-
-                try {
-                    rollbackPlayer = Bukkit.getOfflinePlayer(UUID.fromString(uuidStr));
-                } catch (IllegalArgumentException e) {
-                    sender.sendMessage(MessageData.getPluginPrefix() + MessageData.getError());
-                    return;
-                }
-            } else {
-                // If not UUID length, assume it's a name
-                rollbackPlayer = Bukkit.getOfflinePlayer(args[1]);
-            }
-
-            try {
-                openPlayerMenu(staff, rollbackPlayer);
-            } catch (NullPointerException e) {}
-        } else {
+        if (args.length != 2) {
             sender.sendMessage(MessageData.getPluginPrefix() + MessageData.getError());
+            return;
+        }
+
+        String playerInput = args[1];
+        UUID uuid = parseUuid(playerInput);
+        if (uuid != null) {
+            try {
+                openPlayerMenu(staff, Bukkit.getOfflinePlayer(uuid));
+            } catch (NullPointerException ignored) {}
+            return;
+        }
+
+        OfflinePlayer cachedPlayer = Bukkit.getOfflinePlayerIfCached(playerInput);
+        if (cachedPlayer != null) {
+            openPlayerMenu(staff, cachedPlayer);
+            return;
+        }
+
+        SchedulerUtils.runTaskAsynchronously(() -> {
+            @SuppressWarnings("deprecation")
+            OfflinePlayer rollbackPlayer = Bukkit.getOfflinePlayer(playerInput);
+            PlayerScheduler.run(staff, () -> openPlayerMenu(staff, rollbackPlayer));
+        });
+    }
+
+    private UUID parseUuid(String input) {
+        String uuidStr = input;
+        if (uuidStr.length() != 36 && uuidStr.length() != 32) return null;
+
+        if (uuidStr.length() == 32) {
+            uuidStr = uuidStr.substring(0, 8) + "-"
+                    + uuidStr.substring(8, 12) + "-"
+                    + uuidStr.substring(12, 16) + "-"
+                    + uuidStr.substring(16, 20) + "-"
+                    + uuidStr.substring(20);
+        }
+
+        try {
+            return UUID.fromString(uuidStr);
+        } catch (IllegalArgumentException e) {
+            return null;
         }
     }
 

@@ -7,6 +7,7 @@ import com.tcoded.lightlibs.bukkitversion.BukkitVersion;
 import me.danjono.inventoryrollback.config.ConfigData;
 import me.danjono.inventoryrollback.data.LogType;
 import me.danjono.inventoryrollback.inventory.SaveInventory;
+import me.danjono.inventoryrollback.services.RestoreService;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
@@ -35,10 +36,12 @@ public class EventLogs implements Listener {
 
 	private InventoryRollbackPlus main;
 	private Map<UUID, SaveInventory.PlayerDataSnapshot> inventoryCache;
+	private RestoreService restoreService;
 
 	public EventLogs() {
 		this.main = InventoryRollbackPlus.getInstance();
 		this.inventoryCache = new ConcurrentHashMap<>();
+		this.restoreService = new RestoreService(main);
 	}
 
 	public static void patchLowestHandlers() {
@@ -73,6 +76,8 @@ public class EventLogs implements Listener {
 			new SaveInventory(e.getPlayer(), LogType.JOIN, null, null)
 					.snapshotAndSave(player.getInventory(), player.getEnderChest(), true);
 		}
+		restoreService.applyPendingRestore(player);
+
 		if (player.hasPermission("inventoryrollbackplus.adminalerts")) {
 			// can send info to admins here
 		}
